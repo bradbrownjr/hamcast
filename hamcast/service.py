@@ -14,7 +14,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from . import audio_files, icecast, icecast_server, legacy
+from . import audio_files, icecast, icecast_server, legacy, schedule
 from .audio import FfmpegSink
 from .config import Config, StreamConfig
 from .db import HistoryDB
@@ -26,6 +26,8 @@ from .transcribe import Transcriber
 log = logging.getLogger(__name__)
 
 IDLE_TITLE = "Listening - no one transmitting"
+# How often listeners and schedules are checked for nets linked only when needed.
+CONTROL_INTERVAL = 5
 
 
 class ManagedStream:
@@ -56,6 +58,7 @@ class ManagedStream:
         self.stream.on_transmission_end = self._ended
         self.transcriber = transcriber if scfg.record and scfg.transcribe else None
         self.listeners = 0
+        self.last_listener = 0.0  # when someone was last listening
         self.started = time.time()
         self.stop = asyncio.Event()
         self.task: asyncio.Task | None = None
@@ -120,12 +123,17 @@ class ManagedStream:
         s = self.scfg
         return (s.host, s.port, s.password) if s.type == "dmr" else None
 
+    def idle_title(self) -> str:
+        if self.stream.wanted:
+            return IDLE_TITLE
+        return "Standby - press play to link" if self.scfg.on_listen else "Standby - not linked"
+
     def _title_for(self, heard) -> None:
         via = f" via {heard.gateway}" if heard.gateway else ""
         self._set_title(f"{heard.talker}{via}")
 
     def _ended(self, heard) -> None:
-        self._set_title(IDLE_TITLE)
+        self._set_title(self.idle_title())
         self.db.add(self.scfg.id, heard)
         if heard.recording:
             self._process(heard)
@@ -140,7 +148,7 @@ class ManagedStream:
                 # Icecast only accepts metadata once the source is connected,
                 # which takes a few seconds after ffmpeg starts.
                 await asyncio.sleep(10)
-                self._set_title(IDLE_TITLE)
+                self._set_title(self.idle_title())
             await asyncio.sleep(5)
 
     async def run(self) -> None:
@@ -173,6 +181,7 @@ class Service:
         self.transcriber = Transcriber(cfg.transcription, cfg.data_dir) if cfg.transcription.enabled else None
         self.callsigns = CallsignCache(cfg.data_dir / "radioid-cache.json")
         self.db = HistoryDB(cfg.data_dir / "hamcast.db")
+        self.calendar = schedule.EctloggerCalendar(cfg.ectlogger_url) if cfg.ectlogger_url else None
         self.working: set[int] = set()
         self.running: dict[str, ManagedStream] = {}
         self._links: dict[tuple, _RunningLink] = {}
@@ -191,6 +200,7 @@ class Service:
                 if sid not in self.running:
                     ms = ManagedStream(self.cfg, scfg, self.push_base, self.transcriber, self.callsigns,
                                        self.db, self.working)
+                    ms.stream.set_wanted(schedule.wanted(scfg, 0, 0.0, self.calendar))
                     ms.task = asyncio.create_task(ms.run())
                     self.running[sid] = ms
                     log.info("started %s", sid)
@@ -204,9 +214,10 @@ class Service:
         log.info("stopped %s", sid)
 
     async def _apply_links(self) -> None:
+        # A DMR net is in its master's login only while it wants to be linked.
         groups: dict[tuple, list[ManagedStream]] = {}
         for ms in self.running.values():
-            if ms.link_key:
+            if ms.link_key and ms.stream.wanted:
                 groups.setdefault(ms.link_key, []).append(ms)
         for key, rl in list(self._links.items()):
             members = frozenset(ms.scfg.id for ms in groups.get(key, []))
@@ -235,14 +246,29 @@ class Service:
 
     # ========== RUNNING ==========
 
-    async def _poll_listeners(self, stop: asyncio.Event) -> None:
+    async def _control(self, stop: asyncio.Event) -> None:
+        """Count listeners, and link or unlink each net that is linked only
+        when needed (someone listening, or its schedule)."""
         loop = asyncio.get_running_loop()
         while not stop.is_set():
             counts = await loop.run_in_executor(None, icecast.listener_counts, self.push_base)
+            now = time.time()
+            dmr_changed = False
             for ms in list(self.running.values()):
                 ms.listeners = counts.get(ms.scfg.mount, 0)
+                if ms.listeners:
+                    ms.last_listener = now
+                want = schedule.wanted(ms.scfg, ms.listeners, ms.last_listener, self.calendar, now)
+                if want != ms.stream.wanted:
+                    log.info("%s %s", "linking" if want else "unlinking", ms.scfg.id)
+                    ms.stream.set_wanted(want)
+                    ms._set_title(ms.idle_title())
+                    dmr_changed |= ms.link_key is not None
+            if dmr_changed:
+                async with self._lock:
+                    await self._apply_links()
             try:
-                await asyncio.wait_for(stop.wait(), 15)
+                await asyncio.wait_for(stop.wait(), CONTROL_INTERVAL)
             except asyncio.TimeoutError:
                 pass
 
@@ -265,7 +291,8 @@ class Service:
             await asyncio.gather(
                 *([self.bundled_icecast.run(stop)] if self.bundled_icecast else []),
                 *([self.transcriber.run(stop)] if self.transcriber else []),
-                self._poll_listeners(stop),
+                self._control(stop),
+                *([self.calendar.run(stop)] if self.calendar else []),
                 self._expire_audio(stop),
                 serve_dashboard(self, stop),
             )

@@ -47,6 +47,7 @@ function NetRow({ s, onEdit, onDelete, onToggle }: {
             {s.name}
           </Typography>
           <Chip size="small" variant="outlined" label={s.mount} />
+          <Chip size="small" variant="outlined" label={s.connection === 'needed' ? 'Linked when needed' : 'Always linked'} />
           {s.record && <Chip size="small" variant="outlined" label={s.transcribe ? 'Records + transcribes' : 'Records'} />}
         </Stack>
         <Typography variant="body2" color="text.secondary">
@@ -79,6 +80,10 @@ function SettingsCard({ settings }: { settings: Settings }) {
     ['Icecast', settings.icecast.bundled ? `built in, port ${settings.icecast.port}` : 'external'],
     ['Listener URL', settings.icecast.public_url ?? 'this host'],
     ['Bitrate', settings.icecast.bitrate],
+    ['Audio kept', settings.audio_days ? `${settings.audio_days} days (text forever)` : 'forever'],
+    ['ECTLogger', settings.ectlogger.url
+      ? settings.ectlogger.url + (settings.ectlogger.error ? ` (unreachable: ${settings.ectlogger.error})` : '')
+      : 'not set'],
     ['Transcription', settings.transcription.enabled
       ? `${settings.transcription.backend}, ${settings.transcription.model}`
       : 'off'],
@@ -200,6 +205,7 @@ export default function Manage() {
         open={dialog.open}
         editing={dialog.editing}
         dmrId={dmrId}
+        ectlogger={!!settings?.ectlogger.url}
         onClose={() => setDialog({ open: false, editing: null })}
         onSaved={() => { setDialog({ open: false, editing: null }); load(); }}
       />

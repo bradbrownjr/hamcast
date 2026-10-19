@@ -58,6 +58,15 @@ class StreamStatus:
     frames_unsupported: int = 0
 
 
+async def _first(*waitables) -> None:
+    """Wait until any event is set or task finishes."""
+    tasks = [w if isinstance(w, asyncio.Task) else asyncio.create_task(w.wait()) for w in waitables]
+    await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    for w, t in zip(waitables, tasks):
+        if t is not w:
+            t.cancel()
+
+
 class VoiceStream:
     def __init__(self, name: str, sinks: list[PcmSink] | None = None, record_dir: Path | None = None) -> None:
         self.name = name
@@ -68,6 +77,15 @@ class VoiceStream:
         self._last_frame_at = 0.0
         self.on_transmission_start = None  # optional callback(Heard)
         self.on_transmission_end = None  # optional callback(Heard)
+        # Whether to be linked. The audio clock (and so the Icecast stream)
+        # runs either way; only the reflector link follows this.
+        self.wanted = True
+        self._wanted_changed = asyncio.Event()
+
+    def set_wanted(self, wanted: bool) -> None:
+        if wanted != self.wanted:
+            self.wanted = wanted
+            self._wanted_changed.set()
 
     def _is_linked(self) -> bool:
         raise NotImplementedError
@@ -125,9 +143,23 @@ class VoiceStream:
             if self.status.current and time.monotonic() - self._last_frame_at > TRANSMISSION_TIMEOUT:
                 self._end()
 
+    async def _run_source_when_wanted(self, stop: asyncio.Event) -> None:
+        """Run the link while wanted; unlink (stop it) when not."""
+        while not stop.is_set():
+            if not self.wanted:
+                await _first(stop, self._wanted_changed)
+                self._wanted_changed.clear()
+                continue
+            link_stop = asyncio.Event()
+            link = asyncio.create_task(self._run_source(link_stop))
+            await _first(stop, self._wanted_changed, link)
+            self._wanted_changed.clear()
+            link_stop.set()
+            await link
+
     async def run(self, stop: asyncio.Event) -> None:
         try:
-            await asyncio.gather(self._run_source(stop), self.clock.run(stop), self._watchdog(stop))
+            await asyncio.gather(self._run_source_when_wanted(stop), self.clock.run(stop), self._watchdog(stop))
         finally:
             self._end()
             for sink in self.clock.sinks:
@@ -238,13 +270,20 @@ class DmrStream(VoiceStream):
 
 
 def dmr_plus_options(streams: list[DmrStream]) -> str:
-    """DMR+ IPSC2 static talkgroups for a hotspot: every talkgroup on TS2
-    (TS2_1..TS2_5), no startup reflector (4000) and no user relinking.
-    Syntax from Pi-Star's DMR+ option guides."""
-    tgs = sorted({s.talkgroup for s in streams})
-    if len(tgs) > 5:
-        raise ValueError("DMR+ allows at most 5 static talkgroups per timeslot on one link")
-    return "StartRef=4000;RelinkTime=60;UserLink=0;" + "".join(f"TS2_{i}={tg};" for i, tg in enumerate(tgs, 1))
+    """DMR+ IPSC2 static talkgroups (TSn_1..TSn_5), no startup reflector
+    (4000) and no user relinking. Syntax from Pi-Star's DMR+ option guides.
+
+    A talkgroup goes on TS1 when its net's timeslot is 1, otherwise TS2.
+    Each timeslot carries one call at a time, so nets that may talk at the
+    same moment belong on different timeslots; using TS1 at all makes the
+    login a duplex hotspot (see client.station_config)."""
+    out = "StartRef=4000;RelinkTime=60;UserLink=0;"
+    for ts in (1, 2):
+        tgs = sorted({s.talkgroup for s in streams if (s.slot == 1) == (ts == 1)})
+        if len(tgs) > 5:
+            raise ValueError(f"DMR+ allows at most 5 static talkgroups on TS{ts} of one link")
+        out += "".join(f"TS{ts}_{i}={tg};" for i, tg in enumerate(tgs, 1))
+    return out
 
 
 class DmrLink:

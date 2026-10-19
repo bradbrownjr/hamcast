@@ -42,9 +42,29 @@ function gridColumns(count: number) {
 }
 
 // ========== STATE CHIP ==========
+function standbyHint(s: StreamStatus) {
+  const parts = ['Not linked right now.'];
+  if (s.on_listen) parts.push('Press play to link.');
+  if (s.next_link) {
+    const when = new Date(s.next_link * 1000).toLocaleString([], {
+      weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+    parts.push(`Next scheduled: ${when}.`);
+  }
+  return parts.join(' ');
+}
+
 function StateChip({ s }: { s: StreamStatus }) {
   if (!s.enabled) return <Chip size="small" label="Stopped" />;
   if (s.current) return <Chip size="small" color="error" icon={<MicIcon />} label="On air" />;
+  // Shows for nets linked only when needed, while nothing needs them
+  if (s.standby) {
+    return (
+      <Tooltip title={standbyHint(s)}>
+        <Chip size="small" color="info" variant="outlined" label="Standby" tabIndex={0} />
+      </Tooltip>
+    );
+  }
   if (s.linked) return <Chip size="small" color="primary" label="Linked" />;
   return <Chip size="small" color="warning" variant="outlined" label="Connecting" />;
 }

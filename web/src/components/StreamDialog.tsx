@@ -16,11 +16,13 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { api, StreamConfig } from '../api';
+import ConnectionFields from './ConnectionFields';
 import HostPicker from './HostPicker';
 
 const BLANK: StreamConfig = {
   id: '', name: '', type: 'ysf', host: '', port: 42000, mount: '', description: '',
   record: true, transcribe: true, enabled: true, password: '', talkgroup: 0, slot: 0, options: null,
+  connection: 'always', on_listen: true, linger_minutes: 5, lead_minutes: 10, schedule: [], ectlogger_schedule: null,
 };
 
 function slug(name: string) {
@@ -31,12 +33,13 @@ interface Props {
   open: boolean;
   editing: StreamConfig | null; // null = adding a net
   dmrId: number | null;
+  ectlogger: boolean; // an ECTLogger site is configured
   onClose: () => void;
   onSaved: () => void;
 }
 
 // ========== ADD / EDIT NET DIALOG ==========
-export default function StreamDialog({ open, editing, dmrId, onClose, onSaved }: Props) {
+export default function StreamDialog({ open, editing, dmrId, ectlogger, onClose, onSaved }: Props) {
   const fullScreen = useMediaQuery(useTheme().breakpoints.down('sm'));
   const [s, setS] = useState<StreamConfig>(BLANK);
   const [idTouched, setIdTouched] = useState(false);
@@ -45,7 +48,7 @@ export default function StreamDialog({ open, editing, dmrId, onClose, onSaved }:
 
   useEffect(() => {
     if (open) {
-      setS(editing ?? BLANK);
+      setS(editing ? { ...BLANK, ...editing } : BLANK);
       setIdTouched(!!editing);
       setError(null);
     }
@@ -151,10 +154,11 @@ export default function StreamDialog({ open, editing, dmrId, onClose, onSaved }:
                     select
                     fullWidth
                     label="Timeslot"
+                    helperText="Nets on different timeslots can be heard at once"
                     value={s.slot}
                     onChange={(e) => set('slot', Number(e.target.value))}
                   >
-                    <MenuItem value={0}>Either</MenuItem>
+                    <MenuItem value={0}>Either (TS2)</MenuItem>
                     <MenuItem value={1}>1</MenuItem>
                     <MenuItem value={2}>2</MenuItem>
                   </TextField>
@@ -192,6 +196,8 @@ export default function StreamDialog({ open, editing, dmrId, onClose, onSaved }:
               />
             </Grid>
           </Grid>
+
+          <ConnectionFields s={s} set={set} ectlogger={ectlogger} />
 
           <FormControlLabel
             control={<Switch checked={s.record} onChange={(e) => set('record', e.target.checked)} />}

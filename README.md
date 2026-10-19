@@ -12,8 +12,8 @@ can play it in the page.
 > verified on a live net (both DN and VW voice, intelligible enough for
 > Whisper to transcribe callsigns and names). DMR Homebrew login and decode
 > are verified against a DMR+ IPSC2 master, but not yet on a live net. The
-> Icecast push, transcription and the web app work. Connection modes
-> (on demand, scheduled) are next.
+> Icecast push, transcription, the web app and connection modes (always,
+> on demand, scheduled) work.
 
 ## How it works
 
@@ -112,6 +112,29 @@ The web app is on port 8080 and the streams on port 8000
 
 Light, dark, or follow the system: the button at the top right.
 
+### When a net is linked
+
+Each net is either **always linked**, or linked **when needed**:
+
+- **When someone is listening**: pressing play links the net within about
+  5 seconds (the first moments of a transmission already under way can be
+  missed), and it stays linked a few minutes after the last listener
+  leaves.
+- **Scheduled times** kept in hamcast: days, start, length, and optionally
+  which weeks of the month (the 3rd Thursday).
+- **An ECTLogger schedule**, with `HAMCAST_ECTLOGGER_URL` set: linked from
+  shortly before the net starts, through its lobby and while it runs, until
+  it is closed, read from that site's public calendar.
+
+While unlinked the stream stays up (silent, titled "Standby"), so its
+address always works. Recording and transcription only happen while
+linked.
+
+DMR nets on one master share a single login. Each timeslot carries one
+call at a time, so put nets that can be busy at the same moment on
+different timeslots (Timeslot 1 for one of them); hamcast then logs in as a
+two-timeslot hotspot.
+
 On Unraid, add the template from `unraid/hamcast.xml` (Docker > Add
 Container > Template URL:
 `https://raw.githubusercontent.com/bradbrownjr/hamcast/main/unraid/hamcast.xml`)
@@ -138,6 +161,7 @@ can be set in `config.yaml` or with these environment variables, which win:
 | `HAMCAST_STT_URL` | built-in | Any OpenAI-compatible `/v1/audio/transcriptions` server. The built-in Whisper downloads its model into `data/models` on first use, so image updates don't download it again |
 | `HAMCAST_STT_MODEL` | small.en | Whisper model |
 | `HAMCAST_STT_API_KEY` | | If the STT server needs one |
+| `HAMCAST_ECTLOGGER_URL` | | An ECTLogger site (e.g. `https://app.ectlogger.us`) whose schedules nets can follow |
 | `HAMCAST_AUDIO_DAYS` | 90 | Days to keep each transmission's audio (0 = forever). Transcripts and details are kept forever |
 | `PUID`, `PGID` | 99, 100 | Owner of files in `/data` (Docker) |
 | `TZ` | UTC | Time zone for file names |

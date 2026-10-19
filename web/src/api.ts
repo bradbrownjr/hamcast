@@ -24,6 +24,10 @@ export interface StreamStatus {
   enabled: boolean;
   record: boolean;
   running: boolean;
+  connection: 'always' | 'needed';
+  on_listen: boolean;
+  standby: boolean; // running, but not linked until needed
+  next_link: number | null; // next scheduled start, for nets linked when needed
   linked?: boolean;
   encoder_up?: boolean;
   listeners?: number;
@@ -54,12 +58,28 @@ export interface StreamConfig {
   talkgroup: number;
   slot: number;
   options: string | null;
+  connection: 'always' | 'needed';
+  on_listen: boolean;
+  linger_minutes: number;
+  lead_minutes: number;
+  schedule: ScheduleRule[];
+  ectlogger_schedule: number | null;
+}
+
+/** A weekly window, local time. weeks: which of the month's weekdays (1-5); empty = every week. */
+export interface ScheduleRule {
+  days: string[];
+  time: string;
+  minutes: number;
+  weeks: number[];
 }
 
 export interface Settings {
   callsign: string;
   dmr_id: number | null;
   icecast: { bundled: boolean; public_url: string | null; port: number | null; bitrate: string };
+  ectlogger: { url: string | null; error: string | null };
+  audio_days: number;
   transcription: { enabled: boolean; backend: string; model: string; min_seconds: number };
 }
 
@@ -107,6 +127,7 @@ export const api = {
   ysfHosts: () => call<{ hosts: YsfHost[] }>('GET', '/api/directory/ysf'),
   dmrHosts: () => call<{ hosts: DmrHost[] }>('GET', '/api/directory/dmr'),
   settings: () => call<Settings>('GET', '/api/settings'),
+  ectloggerSchedules: () => call<{ schedules: { id: number; name: string }[] }>('GET', '/api/ectlogger/schedules'),
 };
 
 /** Where a listener plays a net: the public URL, or this host's Icecast port. */

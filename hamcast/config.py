@@ -64,8 +64,18 @@ class StreamConfig:
     # DMR only. Streams on the same host, port and password share one login.
     password: str = ""
     talkgroup: int = 0
-    slot: int = 0  # 0 = either timeslot
+    slot: int = 0  # 0 = either timeslot; 1 puts the talkgroup on TS1 (see dmr_plus_options)
     options: str | None = None  # RPTO string; default is DMR+ static talkgroups
+    # When to be linked (see schedule.py). "always", or "needed": while
+    # someone listens (on_listen, plus linger_minutes after the last one
+    # leaves), or a scheduled window is open (schedule rules, or the
+    # ECTLogger schedule with this id), from lead_minutes before it starts.
+    connection: str = "always"
+    on_listen: bool = True
+    linger_minutes: int = 5
+    lead_minutes: int = 10
+    schedule: list = field(default_factory=list)
+    ectlogger_schedule: int | None = None
 
 
 @dataclass
@@ -85,6 +95,9 @@ class Config:
     # Days to keep each transmission's audio; 0 keeps it forever. The
     # transcript and details are always kept.
     audio_days: int = 90
+    # An ECTLogger site (https://app.ectlogger.us) whose schedules nets can
+    # follow. Empty = off.
+    ectlogger_url: str = ""
 
 
 # Environment variable -> (section, field, type). Empty variables are ignored.
@@ -95,6 +108,7 @@ ENV = {
     "HAMCAST_DASHBOARD_PORT": (None, "dashboard_port", int),
     "HAMCAST_ADMIN_PASSWORD": (None, "admin_password", str),
     "HAMCAST_AUDIO_DAYS": (None, "audio_days", int),
+    "HAMCAST_ECTLOGGER_URL": (None, "ectlogger_url", str),
     "HAMCAST_ICECAST_URL": ("icecast", "push_url", str),
     "HAMCAST_PUBLIC_URL": ("icecast", "public_url", str),
     "HAMCAST_BITRATE": ("icecast", "bitrate", str),
@@ -147,6 +161,25 @@ def validate_stream(s: StreamConfig, dmr_id) -> None:
     s.mount = "/" + (s.mount or s.id).strip("/")
     if not STREAM_ID.match(s.mount[1:]):
         raise ValueError(f"stream {s.id}: mount must be /name with lowercase letters, digits or dashes")
+    _validate_connection(s)
+
+
+def _validate_connection(s: StreamConfig) -> None:
+    from .schedule import validate_rule  # schedule.py imports this module
+    if s.connection not in ("always", "needed"):
+        raise ValueError(f"stream {s.id}: connection must be always or needed")
+    s.linger_minutes, s.lead_minutes = int(s.linger_minutes), int(s.lead_minutes)
+    if not 1 <= s.linger_minutes <= 240:
+        raise ValueError(f"stream {s.id}: stay linked after listeners leave for 1 to 240 minutes")
+    if not 0 <= s.lead_minutes <= 120:
+        raise ValueError(f"stream {s.id}: link early by 0 to 120 minutes")
+    s.schedule = [validate_rule(r, s.id) for r in (s.schedule or [])]
+    if s.ectlogger_schedule in ("", 0):
+        s.ectlogger_schedule = None
+    if s.ectlogger_schedule is not None:
+        s.ectlogger_schedule = int(s.ectlogger_schedule)
+    if s.connection == "needed" and not (s.on_listen or s.schedule or s.ectlogger_schedule):
+        raise ValueError(f"stream {s.id}: link when someone listens, or add a schedule, or it never links")
 
 
 def validate_streams(streams: list[StreamConfig], dmr_id) -> None:
@@ -193,4 +226,5 @@ def load(path: str | Path, environ=os.environ) -> Config:
         dashboard_port=int(raw.get("dashboard_port", 8080)),
         admin_password=str(raw.get("admin_password", "")),
         audio_days=int(raw.get("audio_days", 90)),
+        ectlogger_url=str(raw.get("ectlogger_url", "")).rstrip("/"),
     )

@@ -69,17 +69,18 @@ def parse_voice(data: bytes) -> DmrPacket | None:
     )
 
 
-def station_config(callsign: str, software: str, url: str) -> bytes:
+def station_config(callsign: str, software: str, url: str, duplex: bool = False) -> bytes:
     """The 294-byte RPTC body, laid out as DMRGateway.cpp builds it:
     callsign 8, rx 9, tx 9, power 2, colour code 2, latitude 8,
     longitude 9, height 3, location 20, description 19, slots 1, url 124,
     software id 40, package id 40. Frequencies, power and position are
-    zero: this is not a radio. Slots '4' means a simplex hotspot."""
+    zero: this is not a radio. Slots is '4' for a simplex hotspot (one
+    timeslot) or '3' for duplex with both, as DMRGateway.cpp sets it."""
     body = (
         f"{callsign[:8]:<8}"
         f"{0:09d}{0:09d}{0:02d}{1:02d}"
         f"{0.0:08f}{0.0:09f}{0:03d}"
-        f"{'Internet':<20.20}{'Receive-only stream':<19.19}4"
+        f"{'Internet':<20.20}{'Receive-only stream':<19.19}{'3' if duplex else '4'}"
         f"{url:<124.124}{software:<40.40}{'hamcast':<40.40}"
     )
     return body.encode("ascii")
@@ -107,7 +108,8 @@ class HomebrewClient:
         self.options = options
         self.on_packet = on_packet
         self.on_raw: Callable[[bytes], None] | None = None  # every DMRD datagram, for capture/replay
-        self._config = station_config(callsign, software, url)
+        # Statics on TS1 need a duplex (two-timeslot) login to be delivered.
+        self._config = station_config(callsign, software, url, duplex="TS1_" in (options or ""))
         self._id = radio_id.to_bytes(4, "big")
         self.state = "idle"
         self.linked = False

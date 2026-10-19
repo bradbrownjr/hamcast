@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
-from . import directory
+from . import directory, schedule
 from .auth import COOKIE, SESSION_SECONDS, Auth
 from .config import StreamConfig
 
@@ -57,6 +57,12 @@ class StreamIn(BaseModel):
     talkgroup: int = 0
     slot: int = 0
     options: str | None = None
+    connection: str = "always"
+    on_listen: bool = True
+    linger_minutes: int = 5
+    lead_minutes: int = 10
+    schedule: list[dict] = []
+    ectlogger_schedule: int | None = None
 
 
 class LoginIn(BaseModel):
@@ -89,6 +95,11 @@ def build_app(service) -> FastAPI:
             "enabled": scfg.enabled,
             "record": scfg.record,
             "running": ms is not None,
+            "connection": scfg.connection,
+            "on_listen": scfg.on_listen,
+            # Running but deliberately unlinked until someone listens or its schedule opens.
+            "standby": bool(ms and not ms.stream.wanted),
+            "next_link": schedule.next_link(scfg, service.calendar) if scfg.connection == "needed" else None,
         }
         if ms:
             st = ms.stream.status
@@ -200,6 +211,17 @@ def build_app(service) -> FastAPI:
             None, directory.listing, kind, cfg.data_dir / "directory")
         return {"hosts": hosts}
 
+    @app.get("/api/ectlogger/schedules", dependencies=[Depends(admin)])
+    async def ectlogger_schedules() -> dict:
+        """The ECTLogger site's schedules, for following one from a net."""
+        if not service.calendar:
+            raise HTTPException(404, "set HAMCAST_ECTLOGGER_URL to follow ECTLogger schedules")
+        try:
+            found = await asyncio.get_running_loop().run_in_executor(None, service.calendar.schedules)
+        except Exception as exc:
+            raise HTTPException(502, f"cannot reach ECTLogger: {exc}")
+        return {"schedules": found}
+
     @app.get("/api/settings", dependencies=[Depends(admin)])
     def settings() -> dict:
         """Read-only: these come from the environment or config.yaml."""
@@ -209,6 +231,9 @@ def build_app(service) -> FastAPI:
             "dmr_id": cfg.dmr_id,
             "icecast": {"bundled": ice.bundled, "public_url": ice.public_url or None,
                         "port": ice.port if ice.bundled else None, "bitrate": ice.bitrate},
+            "ectlogger": {"url": cfg.ectlogger_url or None,
+                          "error": service.calendar.error if service.calendar else None},
+            "audio_days": cfg.audio_days,
             "transcription": {"enabled": stt.enabled,
                               "backend": ("external " + stt.url) if stt.url else "built-in faster-whisper",
                               "model": stt.model, "min_seconds": stt.min_seconds},

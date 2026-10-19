@@ -38,12 +38,16 @@ streams:
 
   # DMR: streams on the same host, port and password share one login, so the
   # master sees a single receive-only hotspot. On DMR+ IPSC2 masters each
-  # talkgroup is requested as a static talkgroup on TS2 (at most 5 per link).
+  # talkgroup is requested as a static talkgroup on TS2, or TS1 with slot: 1
+  # (at most 5 per link). Pick the master that carries the network you want:
+  # NEDECN talkgroups come only from IPSC2-NEDECN or IPSC2-CAN-TRBO, both on
+  # 44-net (AMPRNet), so the host needs a route to 44.0.0.0/8. IPSC2-NEWENGLAND
+  # carries Brandmeister talkgroups, not NEDECN's.
   # - id: dirigo
   #   name: ME Dirigo Net
   #   description: Maine Dirigo Net, NEDECN TG 3123
   #   type: dmr
-  #   host: 45.76.167.203   # DMR+_IPSC2-NEWENGLAND (Pi-Star DMR_Hosts.txt)
+  #   host: 44.52.120.20    # DMR+_IPSC2-NEDECN-HAMNET (Pi-Star DMR_Hosts.txt)
   #   port: 55555
   #   password: PASSWORD    # DMR+ public password
   #   talkgroup: 3123

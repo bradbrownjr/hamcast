@@ -9,7 +9,6 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
-import Grid from '@mui/material/Grid';
 import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
@@ -26,6 +25,21 @@ import { useStatus } from '../components/useStatus';
 
 // How many messages a card shows before "Show full conversation".
 const COLLAPSED = 2;
+const GAP = 16; // px between cards
+const NARROWEST = 340; // px; below this a card wraps to the next row
+const FEW_WIDTH = 480; // px; width of each card when there are only 1 or 2
+
+// ========== CARD GRID ==========
+// 3 or more nets: up to 4 per row, stretched to fill it. 1 or 2: a fixed
+// width, centered. Every row is as tall as the tallest card, so all cards
+// match. On a phone it is always one column.
+function gridColumns(count: number) {
+  if (count <= 2) {
+    return { xs: '1fr', sm: `repeat(${count}, minmax(0, ${FEW_WIDTH}px))` };
+  }
+  const quarter = `calc((100% - ${3 * GAP}px) / 4)`;
+  return `repeat(auto-fit, minmax(min(100%, max(${NARROWEST}px, ${quarter})), 1fr))`;
+}
 
 // ========== STATE CHIP ==========
 function StateChip({ s }: { s: StreamStatus }) {
@@ -56,8 +70,8 @@ function Player({ s, status }: { s: StreamStatus; status: Status }) {
 function NetCard({ s, status, onExpand }: { s: StreamStatus; status: Status; onExpand: () => void }) {
   const heard = s.heard ?? [];
   return (
-    <Card variant="outlined">
-      <CardContent>
+    <Card variant="outlined" sx={{ height: '100%' }}>
+      <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Typography variant="h6" component="h2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
             {s.name}
@@ -69,23 +83,27 @@ function NetCard({ s, status, onExpand }: { s: StreamStatus; status: Status; onE
             </IconButton>
           </Tooltip>
         </Stack>
-        <Typography variant="body2" color="text.secondary">
+        {/* One line on cards so every card's player lines up; full text on hover and in the dialog */}
+        <Typography variant="body2" color="text.secondary" noWrap title={s.description || s.source}>
           {s.description || s.source}
         </Typography>
         <Player s={s} status={status} />
 
-        {heard.length === 0 && !s.current ? (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-            Nothing heard yet
-          </Typography>
-        ) : (
-          <Box sx={{ mt: 1 }}>
-            <Conversation heard={heard} current={s.current} streamId={s.id} last={COLLAPSED} />
-          </Box>
-        )}
+        {/* Takes the spare height, so the button below sits at the bottom of every card */}
+        <Box sx={{ flexGrow: 1 }}>
+          {heard.length === 0 && !s.current ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+              Nothing heard yet
+            </Typography>
+          ) : (
+            <Box sx={{ mt: 1 }}>
+              <Conversation heard={heard} current={s.current} streamId={s.id} last={COLLAPSED} />
+            </Box>
+          )}
+        </Box>
         {/* Shows when there is more history than the card holds */}
         {heard.length > COLLAPSED && (
-          <Button size="small" onClick={onExpand} sx={{ mt: 0.5, ml: -1 }}>
+          <Button size="small" onClick={onExpand} sx={{ mt: 0.5, ml: -1, alignSelf: 'flex-start' }}>
             Show full conversation ({heard.length})
           </Button>
         )}
@@ -169,14 +187,19 @@ export default function Listen() {
   return (
     <>
       {error && <Alert severity="warning" sx={{ mb: 2 }}>Lost contact with hamcast: {error}</Alert>}
-      {/* Cards keep their own height, so a quiet net doesn't stretch to match a busy one */}
-      <Grid container spacing={2} sx={{ alignItems: 'flex-start' }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gap: `${GAP}px`,
+          gridTemplateColumns: gridColumns(status.streams.length),
+          gridAutoRows: '1fr',
+          justifyContent: 'center',
+        }}
+      >
         {status.streams.map((s) => (
-          <Grid key={s.id} size={{ xs: 12, sm: 6, lg: 4, xl: 3 }}>
-            <NetCard s={s} status={status} onExpand={() => setExpanded(s.id)} />
-          </Grid>
+          <NetCard key={s.id} s={s} status={status} onExpand={() => setExpanded(s.id)} />
         ))}
-      </Grid>
+      </Box>
       {status.transcribing != null && status.transcribing > 0 && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
           Transcribing {status.transcribing} transmission{status.transcribing === 1 ? '' : 's'}…

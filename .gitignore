@@ -11,3 +11,5 @@ captures/
 *.bin
 config.yaml
 .env
+node_modules/
+hamcast/static/

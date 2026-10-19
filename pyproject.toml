@@ -26,4 +26,4 @@ testpaths = ["tests"]
 include = ["hamcast*"]
 
 [tool.setuptools.package-data]
-hamcast = ["dashboard.html"]
+hamcast = ["static/**/*"]

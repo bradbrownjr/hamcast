@@ -79,9 +79,9 @@ def _hostname(cfg: Config) -> str:
 def render_xml(cfg: Config) -> str:
     ice = cfg.icecast
     share = _share_dir()
-    # Room for every hamcast stream plus a few external sources (e.g. BUTT
-    # feeding an EchoLink node's audio).
-    sources = len(cfg.streams) + 4
+    # Room for nets added from the dashboard later, plus a few external
+    # sources (e.g. BUTT feeding an EchoLink node's audio).
+    sources = max(32, len(cfg.streams) + 8)
     return f"""<icecast>
     <location>hamcast</location>
     <admin>hamcast</admin>

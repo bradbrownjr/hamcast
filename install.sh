@@ -9,8 +9,8 @@
 #   --service      install and enable a systemd service (Linux)
 #
 # Detects the OS and installs what hamcast needs with its package manager:
-# Python 3.11+, a C compiler, git, curl, ffmpeg (with the LAME MP3 encoder)
-# and Icecast. Package names were checked against repology.org; Arch has
+# Python 3.11+, a C compiler, git, curl, ffmpeg (with the LAME MP3 encoder),
+# Node.js 20.19+ (to build the web app) and Icecast. Package names were checked against repology.org; Arch has
 # Icecast only in the AUR, so it is skipped there.
 set -eu
 
@@ -52,30 +52,30 @@ say "Installing system packages for ${PRETTY_NAME:-$OS}"
 case "$OS:$ID:$ID_LIKE" in
     Darwin:*)
         command -v brew >/dev/null 2>&1 || die "install Homebrew first: https://brew.sh"
-        brew install python git ffmpeg $( [ $ICECAST = 1 ] && echo icecast )
+        brew install python git ffmpeg node $( [ $ICECAST = 1 ] && echo icecast )
         ;;
     Linux:debian:*|Linux:ubuntu:*|Linux:raspbian:*|Linux:*:*debian*|Linux:*:*ubuntu*)
         $SUDO apt-get update
         $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            python3 python3-venv gcc libc6-dev git curl ca-certificates ffmpeg \
+            python3 python3-venv gcc libc6-dev git curl ca-certificates ffmpeg nodejs npm \
             $( [ $ICECAST = 1 ] && echo icecast2 )
         ;;
     Linux:fedora:*|Linux:rhel:*|Linux:centos:*|Linux:rocky:*|Linux:almalinux:*|Linux:*:*fedora*|Linux:*:*rhel*)
         if [ "$ID" != "fedora" ]; then
             $SUDO dnf install -y epel-release || true  # ffmpeg and icecast come from EPEL on RHEL clones
         fi
-        $SUDO dnf install -y python3 gcc glibc-devel git curl
+        $SUDO dnf install -y python3 gcc glibc-devel git curl nodejs npm
         $SUDO dnf install -y ffmpeg-free || $SUDO dnf install -y ffmpeg
         [ $ICECAST = 1 ] && $SUDO dnf install -y icecast
         ;;
     Linux:arch:*|Linux:*:*arch*)
-        $SUDO pacman -Sy --needed --noconfirm python gcc git curl ffmpeg
+        $SUDO pacman -Sy --needed --noconfirm python gcc git curl ffmpeg nodejs npm
         if [ $ICECAST = 1 ]; then
             echo "Icecast is only in the AUR on Arch; install it with your AUR helper, or use --no-icecast."
         fi
         ;;
     Linux:alpine:*)
-        $SUDO apk add --no-cache python3 py3-pip gcc musl-dev git curl ffmpeg $( [ $ICECAST = 1 ] && echo icecast )
+        $SUDO apk add --no-cache python3 py3-pip gcc musl-dev git curl ffmpeg nodejs npm $( [ $ICECAST = 1 ] && echo icecast )
         if [ $WHISPER = 1 ]; then
             echo "faster-whisper has no musl wheels; skipping --whisper on Alpine (use HAMCAST_STT_URL)."
             WHISPER=0
@@ -90,6 +90,8 @@ PY="$(command -v python3 || true)"
 [ -n "$PY" ] || die "python3 not found"
 "$PY" -c 'import sys; sys.exit(sys.version_info < (3, 11))' \
     || die "hamcast needs Python 3.11 or newer ($("$PY" --version) found)"
+node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 20 || (a === 20 && b >= 19) ? 0 : 1)' \
+    || die "the web app needs Node.js 20.19 or newer ($(node --version 2>/dev/null || echo none) found); install a newer Node.js and rerun"
 ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libmp3lame \
     || die "ffmpeg has no MP3 encoder (libmp3lame); install an ffmpeg build with LAME"
 
@@ -107,6 +109,7 @@ else
 fi
 
 "$SRC/native/build.sh" "$PREFIX/lib"
+(cd "$SRC/web" && npm ci --no-audit --no-fund && npm run build)
 "$PY" -m venv "$PREFIX/venv"
 "$PREFIX/venv/bin/pip" install -q --upgrade pip
 if [ $WHISPER = 1 ]; then

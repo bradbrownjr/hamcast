@@ -5,6 +5,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev g
 COPY native/ /src/native/
 RUN /src/native/build.sh /out
 
+# ---- web app (Listen and Manage pages) ----
+FROM node:22-slim AS web
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build
+
 # ---- runtime ----
 FROM python:3.13-slim
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg tzdata icecast2 media-types \
@@ -20,6 +28,7 @@ print('\n'.join(p['dependencies'] + p['optional-dependencies']['whisper']))" > /
     && pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 COPY README.md LICENSE ./
 COPY hamcast/ hamcast/
+COPY --from=web /src/hamcast/static/ hamcast/static/
 RUN pip install --no-cache-dir --no-deps .
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 ENV HAMCAST_LIBHCMBE=/usr/local/lib/libhcmbe.so \

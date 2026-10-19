@@ -21,6 +21,14 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Test
         run: python -m pytest -q
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Typecheck and build the web app
+        working-directory: web
+        run: npm ci --no-audit --no-fund && npm run build
 
   image:
     needs: test

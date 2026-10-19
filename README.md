@@ -12,8 +12,8 @@ can play it in the page.
 > verified on a live net (both DN and VW voice, intelligible enough for
 > Whisper to transcribe callsigns and names). DMR Homebrew login and decode
 > are verified against a DMR+ IPSC2 master, but not yet on a live net. The
-> Icecast push and dashboard work. Connection modes and transcription are
-> next.
+> Icecast push, transcription and the web app work. Connection modes
+> (on demand, scheduled) are next.
 
 ## How it works
 
@@ -95,8 +95,20 @@ docker run -d --name hamcast \
   -p 8080:8080 -p 8000:8000 ghcr.io/bradbrownjr/hamcast:latest
 ```
 
-Dashboard on port 8080, streams on port 8000 (`http://host:8000/<mount>`).
-`docker-compose.yml` does the same with compose.
+The web app is on port 8080 and the streams on port 8000
+(`http://host:8000/<mount>`). `docker-compose.yml` does the same with compose.
+
+### The web app
+
+- **Listen** (public): every net with a player, who is talking, and the
+  recently heard stations with their recordings and transcripts.
+- **Manage** (password): add, edit, start, stop and delete nets while
+  hamcast runs. Pick a YSF reflector or DMR master from Pi-Star's public
+  host lists, or type a host and port. The password is
+  `HAMCAST_ADMIN_PASSWORD`, or one generated on first start into
+  `data/admin-password.txt`.
+
+Light, dark, or follow the system: the button at the top right.
 
 On Unraid, add the template from `unraid/hamcast.xml` (Docker > Add
 Container > Template URL:
@@ -105,20 +117,23 @@ and put `config.yaml` in the Config path.
 
 ### Configuration
 
-Nets are listed in `config.yaml`. Everything else can be set there or with
-these environment variables, which win:
+Nets are managed in the web app and saved in `data/streams.json`. On first
+start, the nets in `config.yaml` (if any) are imported; after that
+`streams.json` is used and `config.yaml`'s nets are ignored. Everything else
+can be set in `config.yaml` or with these environment variables, which win:
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `HAMCAST_CALLSIGN` | | Your callsign (required) |
 | `HAMCAST_DMR_ID` | | Your DMR ID + 2-digit hotspot suffix (DMR streams only) |
+| `HAMCAST_ADMIN_PASSWORD` | generated | Password for the Manage pages (saved in `data/admin-password.txt`) |
 | `HAMCAST_ICECAST_URL` | bundled | External Icecast, `icecast://source:PASSWORD@host:8000` |
 | `HAMCAST_PUBLIC_URL` | this host | Base URL listeners use for streams |
 | `HAMCAST_ICECAST_PORT` | 8000 | Bundled Icecast port |
 | `ICECAST_SOURCE_PASSWORD`, `ICECAST_ADMIN_PASSWORD` | generated | Bundled Icecast passwords (saved in `data/icecast-passwords.json`) |
 | `HAMCAST_BITRATE` | 32k | MP3 bitrate |
 | `HAMCAST_TRANSCRIBE` | false | Transcribe each recorded transmission |
-| `HAMCAST_STT_URL` | built-in | Any OpenAI-compatible `/v1/audio/transcriptions` server |
+| `HAMCAST_STT_URL` | built-in | Any OpenAI-compatible `/v1/audio/transcriptions` server. The built-in Whisper downloads its model into `data/models` on first use, so image updates don't download it again |
 | `HAMCAST_STT_MODEL` | small.en | Whisper model |
 | `HAMCAST_STT_API_KEY` | | If the STT server needs one |
 | `PUID`, `PGID` | 99, 100 | Owner of files in `/data` (Docker) |
@@ -132,6 +147,7 @@ segments), and per stream per day as `transcript-YYYYMMDD.txt` lines of
 
 ```sh
 native/build.sh                         # builds native/libhcmbe.so (needs git, curl, gcc)
+(cd web && npm ci && npm run build)     # builds the web app into hamcast/static (Node 20.19+)
 python3 -m hamcast probe-ysf HOST PORT YOURCALL --seconds 120 --out recordings
 python3 -m pytest tests
 ```

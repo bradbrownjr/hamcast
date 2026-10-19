@@ -1,0 +1,9 @@
+**/node_modules
+hamcast/static
+**/__pycache__
+.git
+.pytest_cache
+recordings
+captures
+config.yaml
+.env

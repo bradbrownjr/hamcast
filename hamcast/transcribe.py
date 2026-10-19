@@ -86,6 +86,15 @@ class Transcriber:
         """Queue a finished, recorded transmission."""
         if not heard.recording:
             return
+        try:
+            short = _duration(Path(heard.recording)) < self.cfg.min_seconds
+        except (OSError, EOFError, wave.Error):
+            short = True
+        if short:
+            # Whisper tends to invent text for near-silence (kerchunks, IDs).
+            heard.transcript_status = "too_short"
+            return
+        heard.transcript_status = "queued"
         self.pending += 1
         self._queue.put_nowait((heard, Path(heard.recording), stream_dir))
 
@@ -100,12 +109,13 @@ class Transcriber:
                 getter.cancel()
                 break
             heard, wav, stream_dir = getter.result()
+            heard.transcript_status = "transcribing"
             try:
-                if _duration(wav) < self.cfg.min_seconds:
-                    continue
                 result = await loop.run_in_executor(None, self.backend.transcribe, wav)
                 self._store(heard, wav, stream_dir, result)
+                heard.transcript_status = "done" if result["text"] else "no_speech"
             except Exception as exc:
+                heard.transcript_status = "failed"
                 log.warning("transcribing %s failed: %s", wav.name, exc)
             finally:
                 self.pending -= 1

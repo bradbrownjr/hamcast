@@ -37,6 +37,7 @@ def _heard_json(h) -> dict:
         "seconds": round(h.seconds, 1),
         "recording": Path(h.recording).name if h.recording else None,
         "transcript": h.transcript,
+        "transcript_status": h.transcript_status,
     }
 
 

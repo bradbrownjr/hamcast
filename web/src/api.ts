@@ -8,6 +8,7 @@ export interface Heard {
   seconds: number;
   recording: string | null;
   transcript: string | null;
+  transcript_status: 'queued' | 'transcribing' | 'done' | 'no_speech' | 'too_short' | 'failed' | null;
 }
 
 export interface StreamStatus {

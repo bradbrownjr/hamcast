@@ -89,7 +89,8 @@ export default function App() {
           <Tab value="manage" label="Manage" />
         </Tabs>
       </AppBar>
-      <Container maxWidth="lg" sx={{ py: 3, px: { xs: 2, sm: 3 } }}>
+      {/* Listen is wider so 4 nets fit across a 1080p screen */}
+      <Container maxWidth={page === 'listen' ? 'xl' : 'lg'} sx={{ py: 3, px: { xs: 2, sm: 3 } }}>
         {page === 'listen' ? <Listen /> : <Manage />}
       </Container>
     </Box>

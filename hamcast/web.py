@@ -38,7 +38,8 @@ def build_app(service) -> FastAPI:
             out.append({
                 "id": ms.scfg.id,
                 "name": ms.scfg.name,
-                "source": f"{ms.scfg.type.upper()} {ms.scfg.host}:{ms.scfg.port}",
+                "source": f"{ms.scfg.type.upper()} {ms.scfg.host}:{ms.scfg.port}"
+                          + (f" TG{ms.scfg.talkgroup}" if ms.scfg.type == "dmr" else ""),
                 "listen_url": f"{public}{ms.scfg.mount}" if public else None,
                 "linked": st.linked,
                 "encoder_up": ms.sink.alive(),

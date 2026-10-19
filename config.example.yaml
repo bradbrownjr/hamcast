@@ -4,6 +4,10 @@
 # Never use someone else's callsign or a made-up one.
 callsign: N0CALL
 
+# Your DMR ID (radioid.net) plus a 2-digit hotspot suffix, for DMR streams.
+# Pick a suffix none of your own hotspots use.
+# dmr_id: 312345699
+
 icecast:
   # Where to push streams, with Icecast's source password. The bundled
   # compose file runs Icecast as "icecast"; point this at a remote Icecast
@@ -25,3 +29,16 @@ streams:
     port: 42000
     mount: /ufb
     record: true
+
+  # DMR: streams on the same host, port and password share one login, so the
+  # master sees a single receive-only hotspot. On DMR+ IPSC2 masters each
+  # talkgroup is requested as a static talkgroup on TS2 (at most 5 per link).
+  # - id: dirigo
+  #   name: ME Dirigo Net
+  #   description: Maine Dirigo Net, NEDECN TG 3123
+  #   type: dmr
+  #   host: 45.76.167.203   # DMR+_IPSC2-NEWENGLAND (Pi-Star DMR_Hosts.txt)
+  #   port: 55555
+  #   password: PASSWORD    # DMR+ public password
+  #   talkgroup: 3123
+  #   mount: /dirigo

@@ -48,6 +48,19 @@ int hc_decode_ambe2450(hc_state *s, const char *ambe_d, short *pcm)
     return mbe_processAmbe2450Data(pcm, &r, ambe_d, &s->cur, &s->prev, &s->prev_enhanced);
 }
 
+/* AMBE+2 3600x2450 as a raw 72-bit channel frame (DMR voice burst), laid
+ * out as ambe_fr[4][24], one bit per char, still FEC-coded and whitened;
+ * the library corrects and de-whitens it and uses the error count to
+ * repeat or mute a damaged frame. */
+int hc_decode_ambe3600x2450(hc_state *s, const char *ambe_fr, short *pcm)
+{
+    mbe_process_result r;
+    char ambe_d[49];
+    mbe_initProcessResult(&r);
+    return mbe_processAmbe3600x2450Frame(pcm, &r, (const char (*)[24])ambe_fr, ambe_d,
+                                         &s->cur, &s->prev, &s->prev_enhanced);
+}
+
 /* AMBE 3600x2400 (D-STAR). ambe_d: 49 FEC-decoded bits, one per char. */
 int hc_decode_ambe2400(hc_state *s, const char *ambe_d, short *pcm)
 {

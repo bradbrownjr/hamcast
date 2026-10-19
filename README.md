@@ -10,8 +10,10 @@ can play it in the page.
 
 > **Status: early development.** YSF receive and software decode are
 > verified on a live net (both DN and VW voice, intelligible enough for
-> Whisper to transcribe callsigns and names). The Icecast push and dashboard
-> work. DMR, connection modes and transcription are next.
+> Whisper to transcribe callsigns and names). DMR Homebrew login and decode
+> are verified against a DMR+ IPSC2 master, but not yet on a live net. The
+> Icecast push and dashboard work. Connection modes and transcription are
+> next.
 
 ## How it works
 
@@ -27,14 +29,18 @@ reflector --UDP--> protocol client --> voice frames --> software vocoder --> 8 k
   receive-only hotspot to the reflector. Icecast does the fan-out, so the
   reflector sees the same one connection whether 1 or 500 people listen.
 - **Talker identification for free.** YSF and DMR frames carry the source
-  callsign or ID, so every transmission is labelled with who sent it.
+  callsign or ID, so every transmission is labelled with who sent it. DMR
+  IDs are turned into callsigns with RadioID.net, looked up once per ID in
+  the background and cached.
+- **One DMR login per master.** Every talkgroup you stream from the same
+  master shares a single receive-only login.
 
 ## Supported sources
 
 | Source | Status | Identity needed |
 |---|---|---|
 | YSF reflector (YSFReflector, XLX YSF port) | Receive + decode working | Your callsign (no password) |
-| DMR Homebrew/MMDVM (DMR+ IPSC2, XLX, FreeDMR, TGIF) | Planned | Your DMR ID + hotspot suffix; network's public password |
+| DMR Homebrew/MMDVM (DMR+ IPSC2; XLX, FreeDMR, TGIF untested) | Login + decode working | Your DMR ID + hotspot suffix; the master's password |
 | External Icecast source (e.g. BUTT feeding an EchoLink node) | Planned | n/a |
 
 hamcast identifies itself with the callsign/ID of whoever runs it. Never
@@ -85,9 +91,11 @@ python3 -m hamcast probe-ysf HOST PORT YOURCALL --seconds 120 --out recordings
 python3 -m pytest tests
 ```
 
-`probe-ysf` writes one WAV per transmission. `--capture FILE` also saves the
+`probe-ysf` writes one WAV per transmission (`probe-dmr HOST PORT ID
+PASSWORD --tg TG` does the same for DMR talkgroups). `--capture FILE` also saves the
 raw packets, and `python3 -m hamcast replay-ysf FILE --out DIR` decodes them
-again offline, so decoder changes can be compared on identical audio.
+again offline (`replay-dmr` for DMR captures), so decoder changes can be
+compared on identical audio.
 
 ## Credits
 

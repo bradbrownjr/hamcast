@@ -22,7 +22,7 @@ out="${1:-$here}"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-git clone -q --depth 1 --branch "$NEO_TAG" "$NEO_REPO" "$work/neo"
+git -c advice.detachedHead=false clone -q --depth 1 --branch "$NEO_TAG" "$NEO_REPO" "$work/neo"
 test "$(git -C "$work/neo" rev-parse HEAD)" = "$NEO_COMMIT"
 
 curl -fsSL -o "$work/pffft.tgz" "https://codeload.github.com/arancormonk/pffft/tar.gz/$PFFFT_SHA"

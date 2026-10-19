@@ -27,7 +27,7 @@ def _load() -> ctypes.CDLL:
     lib.hc_new.restype = ctypes.c_void_p
     lib.hc_reset.argtypes = [ctypes.c_void_p]
     lib.hc_free.argtypes = [ctypes.c_void_p]
-    for name in ("hc_decode_ambe2450", "hc_decode_ambe2400", "hc_decode_imbe7200x4400"):
+    for name in ("hc_decode_ambe2450", "hc_decode_ambe3600x2450", "hc_decode_ambe2400", "hc_decode_imbe7200x4400"):
         fn = getattr(lib, name)
         fn.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
         fn.restype = ctypes.c_int
@@ -61,6 +61,10 @@ class Vocoder:
     def decode_ambe2450(self, bits49: bytes) -> bytes:
         """49 one-bit-per-byte values -> 320 bytes of s16le PCM."""
         return self._run(self._lib.hc_decode_ambe2450, bits49)
+
+    def decode_ambe3600x2450(self, frame96: bytes) -> bytes:
+        """A raw FEC-coded AMBE+2 frame laid out as ambe_fr[4][24] -> 320 bytes of s16le PCM."""
+        return self._run(self._lib.hc_decode_ambe3600x2450, frame96)
 
     def decode_ambe2400(self, bits49: bytes) -> bytes:
         return self._run(self._lib.hc_decode_ambe2400, bits49)

@@ -47,6 +47,14 @@ hamcast identifies itself with the callsign/ID of whoever runs it. Never
 configure someone else's callsign or a made-up one: reflector operators watch
 their dashboards.
 
+**Joining a net yourself while hamcast listens** is fine. YSF reflectors
+(xlxd and YSFReflector) tell clients apart by IP address and port, not by
+callsign, so your radio and hamcast are separate links even behind the same
+router, and hamcast still receives your transmissions. You will appear
+twice on the reflector's dashboard. Use your plain callsign: xlxd accepts
+only letters and digits in a YSF callsign, so a tag like `-HC` is refused.
+For DMR, give hamcast a hotspot suffix none of your own hotspots use.
+
 ## Vocoder and patents
 
 Decoding uses [mbelib-neo](https://github.com/arancormonk/mbelib-neo)

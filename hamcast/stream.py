@@ -39,7 +39,8 @@ class Heard:
     recording: str | None = None
     transcript: str | None = None
     # None when not transcribed at all; else queued, transcribing, done,
-    # no_speech (nothing recognizable), too_short or failed.
+    # no_speech (nothing recognizable), too_short, failed, or
+    # not_transcribed (recorded while hamcast was stopping, see history.py).
     transcript_status: str | None = None
 
     @property

@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
-from . import directory
+from . import directory, history
 from .auth import COOKIE, SESSION_SECONDS, Auth
 from .config import StreamConfig
 
@@ -86,6 +86,7 @@ def build_app(service) -> FastAPI:
             "mount": scfg.mount,
             "listen_url": f"{public}{scfg.mount}" if public else None,
             "enabled": scfg.enabled,
+            "record": scfg.record,
             "running": ms is not None,
         }
         if ms:
@@ -108,6 +109,21 @@ def build_app(service) -> FastAPI:
                 # With no public URL the page builds player URLs from its own host.
                 "icecast_port": cfg.icecast.port if cfg.icecast.bundled else None,
                 "transcribing": service.transcriber.pending if service.transcriber else None}
+
+    @app.get("/api/history/{stream_id}")
+    async def stream_history(stream_id: str, before: str | None = None, limit: int = 50) -> dict:
+        """Older transmissions from the recordings on disk, newest first.
+        `before` is the recording file name of the oldest one already shown;
+        `more` says whether there are older ones still."""
+        scfg = service.store.get(stream_id)
+        if not scfg or (before is not None and "/" in before):
+            raise HTTPException(404)
+        stt = cfg.transcription
+        heard, more = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: history.load(cfg.data_dir / "recordings" / stream_id, before=before,
+                                       limit=max(1, min(limit, 200)), min_seconds=stt.min_seconds,
+                                       transcribed=stt.enabled and scfg.transcribe))
+        return {"heard": [_heard_json(h) for h in heard], "more": more}
 
     @app.get("/recordings/{stream_id}/{name}")
     def recording(stream_id: str, name: str) -> FileResponse:

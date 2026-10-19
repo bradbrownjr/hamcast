@@ -101,7 +101,9 @@ The web app is on port 8080 and the streams on port 8000
 ### The web app
 
 - **Listen** (public): every net with a player, who is talking, and the
-  recently heard stations with their recordings and transcripts.
+  conversation so far with each transmission's recording and transcript.
+  The full view pages back through every recording kept on disk, and a
+  restart picks up where it left off.
 - **Manage** (password): add, edit, start, stop and delete nets while
   hamcast runs. Pick a YSF reflector or DMR master from Pi-Star's public
   host lists, or type a host and port. The password is

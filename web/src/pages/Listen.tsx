@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -19,8 +19,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import HeadphonesIcon from '@mui/icons-material/Headphones';
 import MicIcon from '@mui/icons-material/Mic';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
-import { listenUrl, Status, StreamStatus } from '../api';
-import Conversation from '../components/Conversation';
+import { api, Heard, listenUrl, Status, StreamStatus } from '../api';
+import Conversation, { heardKey } from '../components/Conversation';
 import { useStatus } from '../components/useStatus';
 
 // How many messages a card shows before "Show full conversation".
@@ -118,7 +118,67 @@ function ConversationDialog({ s, status, onClose }: { s: StreamStatus | null; st
   const fullScreen = useMediaQuery(useTheme().breakpoints.down('sm'));
   const scroller = useRef<HTMLDivElement | null>(null);
   const following = useRef(true); // false while the reader has scrolled up
-  const count = (s?.heard?.length ?? 0) + (s?.current ? 1 : 0);
+
+  // ---------- History: live messages plus older pages from disk ----------
+  // Everything seen while the dialog is open is kept, so nothing drops out
+  // when the live list (the latest 50) moves on, and a transcript that
+  // arrives later replaces the earlier copy of its message.
+  const [seen, setSeen] = useState<Map<string, Heard>>(new Map());
+  const [more, setMore] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState<string | null>(null);
+  const keepPlace = useRef<{ height: number; top: number } | null>(null);
+
+  useEffect(() => {
+    setSeen(new Map());
+    setMore(true);
+    setOlderError(null);
+  }, [s?.id]);
+  useEffect(() => {
+    if (!s?.heard) return;
+    setSeen((prev) => {
+      const next = new Map(prev);
+      for (const h of s.heard ?? []) next.set(heardKey(h), h);
+      return next;
+    });
+  }, [s?.heard]);
+  const conversation = useMemo(
+    () => [...seen.values()].sort((a, b) => b.started - a.started), // newest first
+    [seen],
+  );
+
+  const loadOlder = async () => {
+    const oldest = conversation[conversation.length - 1];
+    if (!s || !oldest?.recording) return;
+    setLoadingOlder(true);
+    try {
+      const r = await api.history(s.id, oldest.recording);
+      const el = scroller.current;
+      if (el) keepPlace.current = { height: el.scrollHeight, top: el.scrollTop };
+      setSeen((prev) => {
+        const next = new Map(prev);
+        for (const h of r.heard) if (!next.has(heardKey(h))) next.set(heardKey(h), h);
+        return next;
+      });
+      setMore(r.more);
+      setOlderError(null);
+    } catch (err) {
+      setOlderError((err as Error).message);
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+  // Older messages go in above; keep the reader on the message they were reading.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el && keepPlace.current) {
+      el.scrollTop = el.scrollHeight - keepPlace.current.height + keepPlace.current.top;
+      keepPlace.current = null;
+    }
+  }, [conversation]);
+
+  // Changes whenever a new transmission starts or ends.
+  const newest = `${s?.heard?.[0] ? heardKey(s.heard[0]) : ''}|${s?.current?.started ?? ''}`;
 
   const toNewest = () => {
     const el = scroller.current;
@@ -128,7 +188,7 @@ function ConversationDialog({ s, status, onClose }: { s: StreamStatus | null; st
   // reader has scrolled up into the history.
   useEffect(() => {
     if (following.current) toNewest();
-  }, [count]);
+  }, [newest]);
   const onScroll = () => {
     const el = scroller.current;
     if (el) following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
@@ -162,10 +222,23 @@ function ConversationDialog({ s, status, onClose }: { s: StreamStatus | null; st
             <Player s={s} status={status} />
           </DialogTitle>
           <DialogContent dividers ref={scroller} onScroll={onScroll}>
-            {(s.heard ?? []).length === 0 && !s.current ? (
+            {/* Shows when this net keeps recordings to page back through */}
+            {s.record && conversation.length > 0 && (
+              <Box sx={{ textAlign: 'center', pb: 1 }}>
+                {more ? (
+                  <Button size="small" onClick={loadOlder} disabled={loadingOlder}>
+                    {loadingOlder ? 'Loading…' : 'Load older'}
+                  </Button>
+                ) : (
+                  <Typography variant="caption" color="text.secondary">Start of the recordings</Typography>
+                )}
+                {olderError && <Alert severity="error" sx={{ mt: 1 }}>{olderError}</Alert>}
+              </Box>
+            )}
+            {conversation.length === 0 && !s.current ? (
               <Typography variant="body2" color="text.secondary">Nothing heard yet</Typography>
             ) : (
-              <Conversation heard={s.heard ?? []} current={s.current} streamId={s.id} />
+              <Conversation heard={conversation} current={s.current} streamId={s.id} />
             )}
           </DialogContent>
         </>

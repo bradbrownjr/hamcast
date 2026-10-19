@@ -18,6 +18,7 @@ import wave
 from pathlib import Path
 
 from .config import TranscriptionConfig
+from .history import metadata
 
 log = logging.getLogger(__name__)
 
@@ -122,8 +123,7 @@ class Transcriber:
 
     def _store(self, heard, wav: Path, stream_dir: Path, result: dict) -> None:
         heard.transcript = result["text"]
-        record = {"talker": heard.talker, "gateway": heard.gateway, "mode": heard.mode,
-                  "started": heard.started, "seconds": round(heard.seconds, 1), **result}
+        record = {**metadata(heard), **result}
         wav.with_suffix(".json").write_text(json.dumps(record, indent=1))
         if result["text"]:
             day = time.strftime("%Y%m%d", time.localtime(heard.started))

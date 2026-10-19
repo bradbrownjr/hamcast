@@ -62,6 +62,8 @@ function TranscriptLine({ h }: { h: Heard }) {
       return muted('No speech recognized');
     case 'too_short':
       return muted('Too short to transcribe');
+    case 'not_transcribed':
+      return muted('Not transcribed');
     case 'failed':
       return <Typography variant="body2" color="error" sx={{ fontStyle: 'italic' }}>Transcription failed</Typography>;
     default:
@@ -90,6 +92,11 @@ function Message({ h, streamId }: { h: Heard; streamId: string }) {
   );
 }
 
+/** One key per transmission, the same whether it came live or from history. */
+export function heardKey(h: Heard) {
+  return h.recording ?? `${h.started}`;
+}
+
 // ========== CONVERSATION ==========
 // Oldest first, like a chat. `last` limits it to the most recent few.
 export default function Conversation({ heard, current, streamId, last }: {
@@ -103,7 +110,7 @@ export default function Conversation({ heard, current, streamId, last }: {
   return (
     <Box>
       {shown.map((h) => (
-        <Message key={`${h.talker}-${h.started}`} h={h} streamId={streamId} />
+        <Message key={heardKey(h)} h={h} streamId={streamId} />
       ))}
       {/* Shows while a station is transmitting */}
       {current && (

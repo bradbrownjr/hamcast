@@ -13,7 +13,7 @@ import logging
 import time
 from dataclasses import asdict
 
-from . import icecast, icecast_server
+from . import history, icecast, icecast_server
 from .audio import FfmpegSink
 from .config import Config, StreamConfig
 from .dmr.radioid import CallsignCache
@@ -51,6 +51,20 @@ class ManagedStream:
         self.started = time.time()
         self.stop = asyncio.Event()
         self.task: asyncio.Task | None = None
+        if scfg.record:
+            self._load_recent()
+
+    def _load_recent(self) -> None:
+        """Start with the latest transmissions from disk, so a restart doesn't
+        empty the conversation. Any a restart kept from being transcribed are
+        queued again."""
+        recent, _ = history.load(self.record_dir, limit=self.stream.status.heard.maxlen,
+                                 min_seconds=self.cfg.transcription.min_seconds,
+                                 transcribed=self.transcriber is not None)
+        self.stream.status.heard.extend(recent)
+        for heard in reversed(recent):  # oldest first, like they happened
+            if heard.transcript_status == "not_transcribed":
+                self.transcriber.submit(heard, self.record_dir)
 
     @property
     def link_key(self) -> tuple | None:
@@ -63,6 +77,7 @@ class ManagedStream:
 
     def _ended(self, heard) -> None:
         self._set_title(IDLE_TITLE)
+        history.write_metadata(heard)
         if self.transcriber:
             self.transcriber.submit(heard, self.record_dir)
 

@@ -8,7 +8,8 @@ export interface Heard {
   seconds: number;
   recording: string | null;
   transcript: string | null;
-  transcript_status: 'queued' | 'transcribing' | 'done' | 'no_speech' | 'too_short' | 'failed' | null;
+  transcript_status:
+    | 'queued' | 'transcribing' | 'done' | 'no_speech' | 'too_short' | 'failed' | 'not_transcribed' | null;
 }
 
 export interface StreamStatus {
@@ -20,6 +21,7 @@ export interface StreamStatus {
   mount: string;
   listen_url: string | null;
   enabled: boolean;
+  record: boolean;
   running: boolean;
   linked?: boolean;
   encoder_up?: boolean;
@@ -88,6 +90,12 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 export const api = {
   status: () => call<Status>('GET', '/api/status'),
+  /** Older transmissions from disk, newest first, before the named recording. */
+  history: (id: string, before?: string) =>
+    call<{ heard: Heard[]; more: boolean }>(
+      'GET',
+      `/api/history/${id}` + (before ? `?before=${encodeURIComponent(before)}` : ''),
+    ),
   me: () => call<{ admin: boolean }>('GET', '/api/me'),
   login: (password: string) => call<{ admin: boolean }>('POST', '/api/login', { password }),
   logout: () => call<{ admin: boolean }>('POST', '/api/logout'),

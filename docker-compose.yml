@@ -1,21 +1,14 @@
+# hamcast all in one: bundled Icecast and (optional) built-in Whisper.
+# Settings come from .env (see .env.example); nets from config/config.yaml.
 services:
-  icecast:
-    image: libretime/icecast:2.4.4
-    restart: unless-stopped
-    environment:
-      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?set in .env}
-      ICECAST_ADMIN_PASSWORD: ${ICECAST_ADMIN_PASSWORD:?set in .env}
-      ICECAST_RELAY_PASSWORD: ${ICECAST_RELAY_PASSWORD:?set in .env}
-    ports:
-      - "${ICECAST_PORT:-8000}:8000"
-
   hamcast:
-    build: .
+    image: ghcr.io/bradbrownjr/hamcast:latest
+    # build: .   # to build from this checkout instead
     restart: unless-stopped
-    command: ["serve", "--config", "/config/config.yaml"]
-    depends_on: [icecast]
+    env_file: .env
     volumes:
-      - ./config.yaml:/config/config.yaml:ro
+      - ./config:/config:ro
       - ./data:/data
     ports:
-      - "${HAMCAST_DASHBOARD_PORT:-8080}:8080"
+      - "${DASHBOARD_HOST_PORT:-8080}:8080"
+      - "${ICECAST_HOST_PORT:-8000}:8000"

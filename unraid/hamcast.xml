@@ -17,7 +17,7 @@ Put the list of nets in config.yaml in the Config path (see config.example.yaml 
   <Category>Tools:Utilities MediaServer:Music</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/bradbrownjr/hamcast/main/unraid/hamcast.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/bradbrownjr/hamcast/main/unraid/icon.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/bradbrownjr/hamcast/main/unraid/icon.png</Icon>
   <ExtraParams>--restart unless-stopped</ExtraParams>
   <PostArgs>serve --config /config/config.yaml</PostArgs>
   <CPUset/>

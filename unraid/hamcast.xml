@@ -11,7 +11,9 @@
   <Project>https://github.com/bradbrownjr/hamcast</Project>
   <Overview>Streams amateur digital voice nets (YSF, DMR) to Icecast, receive-only. hamcast links to a reflector or DMR master as a single listen-only hotspot, decodes the audio in software, and pushes an MP3 stream per net to an Icecast server, with a dashboard showing who is talking and per-transmission recordings.&#xD;
 &#xD;
-Before first start, put a config.yaml in the Config path (copy config.example.yaml from the project page) with your callsign, your Icecast server's source password, and your streams. hamcast identifies itself with your callsign and DMR ID: never configure someone else's.</Overview>
+All in one: hamcast runs its own Icecast and can transcribe every transmission with a built-in Whisper. Each can be swapped for your own service with the variables below (an external Icecast URL, or any OpenAI-compatible speech-to-text URL).&#xD;
+&#xD;
+Put the list of nets in config.yaml in the Config path (see config.example.yaml on the project page). hamcast identifies itself with your callsign and DMR ID: never configure someone else's.</Overview>
   <Category>Tools:Utilities MediaServer:Music</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/bradbrownjr/hamcast/main/unraid/hamcast.xml</TemplateURL>
@@ -19,9 +21,22 @@ Before first start, put a config.yaml in the Config path (copy config.example.ya
   <ExtraParams>--restart unless-stopped</ExtraParams>
   <PostArgs>serve --config /config/config.yaml</PostArgs>
   <CPUset/>
-  <Requires>An Icecast server to push streams to.</Requires>
+  <Requires/>
   <Config Name="Dashboard port" Target="8080" Default="8080" Mode="tcp" Description="Status page: who is talking, last heard, recordings, a player per stream." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
-  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/hamcast/config" Mode="ro" Description="Holds config.yaml." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/hamcast/config</Config>
-  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/hamcast/data" Mode="rw" Description="Recordings (one WAV per transmission) and the DMR ID callsign cache." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/hamcast/data</Config>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/hamcast/config" Mode="ro" Description="Holds config.yaml (the list of nets)." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/hamcast/config</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/hamcast/data" Mode="rw" Description="Recordings and transcripts, Whisper models, the DMR callsign cache, generated Icecast passwords." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/hamcast/data</Config>
+  <Config Name="Icecast port" Target="8000" Default="8000" Mode="tcp" Description="Bundled Icecast: the stream URLs listeners use (http://server:port/mount). Unused with an external Icecast." Type="Port" Display="always" Required="false" Mask="false">8000</Config>
+  <Config Name="Callsign" Target="HAMCAST_CALLSIGN" Default="" Mode="" Description="Your own callsign. hamcast links to reflectors as this callsign, receive-only." Type="Variable" Display="always" Required="true" Mask="false"></Config>
+  <Config Name="DMR ID" Target="HAMCAST_DMR_ID" Default="" Mode="" Description="Your DMR ID plus a 2-digit hotspot suffix none of your hotspots use (e.g. 312345699). Only needed for DMR streams." Type="Variable" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="External Icecast URL" Target="HAMCAST_ICECAST_URL" Default="" Mode="" Description="Leave empty to use the bundled Icecast. Otherwise icecast://source:PASSWORD@host:8000." Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <Config Name="Public stream URL" Target="HAMCAST_PUBLIC_URL" Default="" Mode="" Description="Base URL listeners use (e.g. https://stream.example.org). Empty = this server's address and Icecast port." Type="Variable" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="Icecast source password" Target="ICECAST_SOURCE_PASSWORD" Default="" Mode="" Description="Bundled Icecast. Empty = generated once and saved in Data/icecast-passwords.json. Set it to feed extra sources (e.g. BUTT)." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="Icecast admin password" Target="ICECAST_ADMIN_PASSWORD" Default="" Mode="" Description="Bundled Icecast admin pages (user admin). Empty = generated, see Data/icecast-passwords.json." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="Transcribe" Target="HAMCAST_TRANSCRIBE" Default="false" Mode="" Description="true to transcribe every recorded transmission." Type="Variable" Display="always" Required="false" Mask="false">false</Config>
+  <Config Name="Speech-to-text URL" Target="HAMCAST_STT_URL" Default="" Mode="" Description="Any OpenAI-compatible transcription endpoint (e.g. http://10.0.0.2:9000). Empty = built-in faster-whisper on the CPU." Type="Variable" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="Speech-to-text model" Target="HAMCAST_STT_MODEL" Default="small.en" Mode="" Description="Whisper model name (built-in: tiny.en, base.en, small.en, medium.en...; for a URL, whatever that server calls it)." Type="Variable" Display="always" Required="false" Mask="false">small.en</Config>
+  <Config Name="Speech-to-text API key" Target="HAMCAST_STT_API_KEY" Default="" Mode="" Description="Only if the speech-to-text service needs one." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User that owns files in Data." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group that owns files in Data." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
   <Config Name="TZ" Target="TZ" Default="America/New_York" Mode="" Description="Time zone for recording file names and the dashboard log." Type="Variable" Display="advanced" Required="false" Mask="false">America/New_York</Config>
 </Container>

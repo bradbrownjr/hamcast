@@ -43,6 +43,7 @@
   a { color: var(--accent); }
   .wrap { overflow-x: auto; }
   .empty { color: var(--muted); font-size: 14px; }
+  tr.tx td { color: var(--muted); font-size: 13px; padding-top: 0; }
 </style>
 </head>
 <body>
@@ -66,9 +67,10 @@ function render(data) {
         + '<div class="now"></div><div class="player"></div><div class="wrap"><table><thead><tr><th>Time</th><th>Talker</th><th>Via</th><th>Mode</th><th>Length</th><th>Recording</th></tr></thead><tbody></tbody></table></div>';
       root.querySelector(".empty")?.remove();
       root.appendChild(card);
-      if (s.listen_url) {
+      const url = s.listen_url || (data.icecast_port ? `${location.protocol}//${location.hostname}:${data.icecast_port}${s.mount}` : null);
+      if (url) {
         const a = document.createElement("audio");
-        a.controls = true; a.preload = "none"; a.src = s.listen_url;
+        a.controls = true; a.preload = "none"; a.src = url;
         card.querySelector(".player").appendChild(a);
         players[s.id] = a;
       }
@@ -90,6 +92,7 @@ function render(data) {
     card.querySelector("tbody").innerHTML = s.heard.length ? s.heard.map(h =>
       `<tr><td class="num">${t(h.started)}</td><td>${esc(h.talker)}</td><td>${esc(h.gateway)}</td><td>${esc(h.mode)}</td>`
       + `<td class="num">${h.seconds}s</td><td>${h.recording ? `<a href="recordings/${encodeURIComponent(s.id)}/${encodeURIComponent(h.recording)}">wav</a>` : ""}</td></tr>`
+      + (h.transcript ? `<tr class="tx"><td></td><td colspan="5">${esc(h.transcript)}</td></tr>` : "")
     ).join("") : '<tr><td colspan="6" class="empty">Nothing heard yet</td></tr>';
   }
 }

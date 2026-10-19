@@ -37,6 +37,7 @@ class Heard:
     ended: float | None = None
     mode: str = ""
     recording: str | None = None
+    transcript: str | None = None
 
     @property
     def seconds(self) -> float:

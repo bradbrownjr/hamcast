@@ -7,12 +7,19 @@ RUN /src/native/build.sh /out
 
 # ---- runtime ----
 FROM python:3.13-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg tzdata \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg tzdata icecast2 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=native /out/libhcmbe.so /usr/local/lib/libhcmbe.so
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY hamcast/ hamcast/
-RUN pip install --no-cache-dir .
-ENV HAMCAST_LIBHCMBE=/usr/local/lib/libhcmbe.so
-ENTRYPOINT ["hamcast"]
+RUN pip install --no-cache-dir ".[whisper]"
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ENV HAMCAST_LIBHCMBE=/usr/local/lib/libhcmbe.so \
+    HOME=/tmp \
+    HF_HOME=/data/models/huggingface \
+    PYTHONUNBUFFERED=1
+# 8080 dashboard, 8000 bundled Icecast
+EXPOSE 8080 8000
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["serve", "--config", "/config/config.yaml"]

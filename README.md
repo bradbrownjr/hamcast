@@ -74,20 +74,51 @@ adds about 2 seconds of delay. Recordings are kept unprocessed.
 
 ## Running
 
+hamcast is all in one: it runs its own Icecast and can transcribe every
+transmission with a built-in Whisper. Either can be replaced by a service
+you already run.
+
 ```sh
-cp config.example.yaml config.yaml   # set your callsign and streams
-cp .env.example .env                 # set Icecast passwords (and the same source password in config.yaml)
-docker compose up -d --build
+mkdir -p config data
+cp config.example.yaml config/config.yaml   # your nets
+docker run -d --name hamcast \
+  -e HAMCAST_CALLSIGN=N0CALL -e HAMCAST_DMR_ID=312345699 \
+  -v $PWD/config:/config:ro -v $PWD/data:/data \
+  -p 8080:8080 -p 8000:8000 ghcr.io/bradbrownjr/hamcast:latest
 ```
+
+Dashboard on port 8080, streams on port 8000 (`http://host:8000/<mount>`).
+`docker-compose.yml` does the same with compose.
 
 On Unraid, add the template from `unraid/hamcast.xml` (Docker > Add
 Container > Template URL:
-`https://raw.githubusercontent.com/bradbrownjr/hamcast/main/unraid/hamcast.xml`),
-put your `config.yaml` in the Config path, and point it at an Icecast
-server. The image is published as `ghcr.io/bradbrownjr/hamcast`.
+`https://raw.githubusercontent.com/bradbrownjr/hamcast/main/unraid/hamcast.xml`)
+and put `config.yaml` in the Config path.
 
-Dashboard on port 8080 (link state, who is talking, last heard, recordings,
-and a player per stream). Icecast on port 8000.
+### Configuration
+
+Nets are listed in `config.yaml`. Everything else can be set there or with
+these environment variables, which win:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `HAMCAST_CALLSIGN` | | Your callsign (required) |
+| `HAMCAST_DMR_ID` | | Your DMR ID + 2-digit hotspot suffix (DMR streams only) |
+| `HAMCAST_ICECAST_URL` | bundled | External Icecast, `icecast://source:PASSWORD@host:8000` |
+| `HAMCAST_PUBLIC_URL` | this host | Base URL listeners use for streams |
+| `HAMCAST_ICECAST_PORT` | 8000 | Bundled Icecast port |
+| `ICECAST_SOURCE_PASSWORD`, `ICECAST_ADMIN_PASSWORD` | generated | Bundled Icecast passwords (saved in `data/icecast-passwords.json`) |
+| `HAMCAST_BITRATE` | 32k | MP3 bitrate |
+| `HAMCAST_TRANSCRIBE` | false | Transcribe each recorded transmission |
+| `HAMCAST_STT_URL` | built-in | Any OpenAI-compatible `/v1/audio/transcriptions` server |
+| `HAMCAST_STT_MODEL` | small.en | Whisper model |
+| `HAMCAST_STT_API_KEY` | | If the STT server needs one |
+| `PUID`, `PGID` | 99, 100 | Owner of files in `/data` (Docker) |
+| `TZ` | UTC | Time zone for file names |
+
+Transcripts are saved beside each recording as JSON (text and timed
+segments), and per stream per day as `transcript-YYYYMMDD.txt` lines of
+`HH:MM:SS CALLSIGN: text`.
 
 ## Development
 

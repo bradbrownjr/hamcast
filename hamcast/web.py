@@ -19,6 +19,7 @@ def _heard_json(h) -> dict:
         "started": h.started,
         "seconds": round(h.seconds, 1),
         "recording": Path(h.recording).name if h.recording else None,
+        "transcript": h.transcript,
     }
 
 
@@ -41,6 +42,7 @@ def build_app(service) -> FastAPI:
                 "source": f"{ms.scfg.type.upper()} {ms.scfg.host}:{ms.scfg.port}"
                           + (f" TG{ms.scfg.talkgroup}" if ms.scfg.type == "dmr" else ""),
                 "listen_url": f"{public}{ms.scfg.mount}" if public else None,
+                "mount": ms.scfg.mount,
                 "linked": st.linked,
                 "encoder_up": ms.sink.alive(),
                 "listeners": ms.listeners,
@@ -49,7 +51,10 @@ def build_app(service) -> FastAPI:
                 "frames": {"ok": st.frames_ok, "bad_fich": st.frames_bad_fich,
                            "unsupported": st.frames_unsupported},
             })
-        return {"callsign": service.cfg.callsign, "now": time.time(), "streams": out}
+        return {"callsign": service.cfg.callsign, "now": time.time(), "streams": out,
+                # With no public URL the page builds player URLs from its own host.
+                "icecast_port": service.cfg.icecast.port if service.cfg.icecast.bundled else None,
+                "transcribing": service.transcriber.pending if service.transcriber else None}
 
     @app.get("/recordings/{stream_id}/{name}")
     def recording(stream_id: str, name: str) -> FileResponse:

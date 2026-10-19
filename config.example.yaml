@@ -8,14 +8,20 @@ callsign: N0CALL
 # Pick a suffix none of your own hotspots use.
 # dmr_id: 312345699
 
-icecast:
-  # Where to push streams, with Icecast's source password. The bundled
-  # compose file runs Icecast as "icecast"; point this at a remote Icecast
-  # to publish elsewhere.
-  push_url: icecast://source:CHANGE-ME@icecast:8000
-  # Base URL listeners use; the dashboard builds its players from this.
-  public_url: http://localhost:8000
-  bitrate: 32k
+# Every setting below except streams can also come from an environment
+# variable (README, "Configuration"), which wins over this file.
+
+# icecast:
+#   # Empty push_url = run the bundled Icecast (port 8000, passwords
+#   # generated into data_dir/icecast-passwords.json unless set here).
+#   push_url: icecast://source:PASSWORD@your-icecast:8000
+#   public_url: https://stream.example.org   # what listeners use
+#   bitrate: 32k
+
+# transcription:
+#   enabled: true
+#   url: http://10.0.0.2:9000   # OpenAI-compatible; empty = built-in Whisper
+#   model: small.en
 
 data_dir: /data          # recordings go in <data_dir>/recordings/<stream id>/
 dashboard_port: 8080

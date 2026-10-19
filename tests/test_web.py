@@ -63,20 +63,17 @@ def test_crud_persists_and_validates(client):
 
 
 def test_history_is_public_and_paged(client):
-    rec = client.service.cfg.data_dir / "recordings" / "ufb"
-    rec.mkdir(parents=True)
+    from hamcast.stream import Heard
+    db = client.service.db
     for i in range(3):
-        (rec / f"20261019-10000{i}_K1AA{i}.wav").write_bytes(b"")  # unreadable: skipped
-    import wave
-    for i in range(3):
-        with wave.open(str(rec / f"20261019-11000{i}_K1BB{i}.wav"), "wb") as w:
-            w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000); w.writeframes(b"\0\0" * 8000)
+        db.add("ufb", Heard(talker=f"K1BB{i}", gateway="", started=1000 + i, ended=1003 + i,
+                            recording=f"/x/2026_K1BB{i}.mp3", transcript="hi", transcript_status="done"))
     r = client.get("/api/history/ufb?limit=2").json()
     assert [h["talker"] for h in r["heard"]] == ["K1BB2", "K1BB1"] and r["more"]
-    r = client.get(f"/api/history/ufb?limit=2&before={r['heard'][-1]['recording']}").json()
+    assert r["heard"][0]["recording"] == "2026_K1BB2.mp3" and r["heard"][0]["id"]
+    r = client.get(f"/api/history/ufb?limit=2&before={r['heard'][-1]['started']}").json()
     assert [h["talker"] for h in r["heard"]] == ["K1BB0"] and not r["more"]
     assert client.get("/api/history/nope").status_code == 404
-    assert client.get("/api/history/ufb?before=../x").status_code == 404
 
 
 def test_logout(client):

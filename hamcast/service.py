@@ -12,10 +12,12 @@ import asyncio
 import logging
 import time
 from dataclasses import asdict
+from pathlib import Path
 
-from . import history, icecast, icecast_server
+from . import audio_files, icecast, icecast_server, legacy
 from .audio import FfmpegSink
 from .config import Config, StreamConfig
+from .db import HistoryDB
 from .dmr.radioid import CallsignCache
 from .store import StreamStore
 from .stream import DmrLink, DmrStream, VoiceStream, YsfStream
@@ -30,8 +32,14 @@ class ManagedStream:
     """A stream plus its Icecast push, kept alive across ffmpeg crashes."""
 
     def __init__(self, cfg: Config, scfg: StreamConfig, push_base: str,
-                 transcriber: Transcriber | None, callsigns: CallsignCache) -> None:
+                 transcriber: Transcriber | None, callsigns: CallsignCache, db: HistoryDB,
+                 working: set[int]) -> None:
         self.cfg = cfg
+        self.db = db
+        # Rows whose audio is being transcribed or compressed, shared by every
+        # net and kept across a net's restart (editing it), so a WAV already
+        # in the queue isn't queued twice.
+        self.working = working
         self.scfg = scfg
         self.push_base = push_base
         self.sink = FfmpegSink(push_base.rstrip("/") + scfg.mount, cfg.icecast.bitrate, scfg.name, scfg.description)
@@ -51,20 +59,61 @@ class ManagedStream:
         self.started = time.time()
         self.stop = asyncio.Event()
         self.task: asyncio.Task | None = None
-        if scfg.record:
-            self._load_recent()
+        self._start_from_history()
 
-    def _load_recent(self) -> None:
-        """Start with the latest transmissions from disk, so a restart doesn't
-        empty the conversation. Any a restart kept from being transcribed are
-        queued again."""
-        recent, _ = history.load(self.record_dir, limit=self.stream.status.heard.maxlen,
-                                 min_seconds=self.cfg.transcription.min_seconds,
-                                 transcribed=self.transcriber is not None)
+    # ========== HISTORY ==========
+
+    def _start_from_history(self) -> None:
+        """Start with the latest transmissions from the database, so a restart
+        doesn't empty the conversation, and finish any audio a restart left
+        as WAV (transcribe, or compress, or delete)."""
+        flag = f"imported:{self.scfg.id}"
+        if not self.db.flag(flag):
+            for heard in legacy.recordings(self.record_dir):
+                self.db.add(self.scfg.id, heard)
+            self.db.set_flag(flag)
+        recent, _ = self.db.page(self.scfg.id, self.record_dir, limit=self.stream.status.heard.maxlen)
         self.stream.status.heard.extend(recent)
-        for heard in reversed(recent):  # oldest first, like they happened
-            if heard.transcript_status == "not_transcribed":
-                self.transcriber.submit(heard, self.record_dir)
+        shown = {h.id: h for h in recent}
+        for heard in self.db.unfinished(self.scfg.id, self.record_dir):
+            # Use the entry the page shows, so its status updates live.
+            self._process(shown.get(heard.id, heard))
+
+    def _process(self, heard) -> None:
+        """A recorded transmission's audio: delete it if too short to be
+        speech, else transcribe (when on) and then compress it."""
+        if heard.id in self.working:
+            return
+        wav = Path(heard.recording)
+        if not wav.exists():
+            heard.recording = None
+            self.db.update(heard)
+            return
+        if audio_files.duration(wav) < self.cfg.transcription.min_seconds:
+            wav.unlink(missing_ok=True)
+            heard.recording = None
+            heard.transcript_status = "too_short" if self.transcriber else None
+            self.db.update(heard)
+            return
+        self.working.add(heard.id)
+        if self.transcriber and heard.transcript_status not in ("done", "no_speech", "failed"):
+            self.transcriber.submit(heard, self._transcribed)
+            self.db.update(heard)
+        else:
+            asyncio.get_running_loop().create_task(self._compress(heard))
+
+    def _transcribed(self, heard, segments) -> None:
+        self.db.update(heard, segments)
+        asyncio.get_running_loop().create_task(self._compress(heard))
+
+    async def _compress(self, heard) -> None:
+        try:
+            mp3 = await audio_files.compress(Path(heard.recording), self.cfg.icecast.bitrate)
+            if mp3:
+                heard.recording = str(mp3)
+                self.db.update(heard)
+        finally:
+            self.working.discard(heard.id)
 
     @property
     def link_key(self) -> tuple | None:
@@ -77,9 +126,9 @@ class ManagedStream:
 
     def _ended(self, heard) -> None:
         self._set_title(IDLE_TITLE)
-        history.write_metadata(heard)
-        if self.transcriber:
-            self.transcriber.submit(heard, self.record_dir)
+        self.db.add(self.scfg.id, heard)
+        if heard.recording:
+            self._process(heard)
 
     def _set_title(self, title: str) -> None:
         asyncio.get_running_loop().run_in_executor(None, icecast.set_title, self.push_base, self.scfg.mount, title)
@@ -123,6 +172,8 @@ class Service:
             self.push_base = cfg.icecast.push_url
         self.transcriber = Transcriber(cfg.transcription, cfg.data_dir) if cfg.transcription.enabled else None
         self.callsigns = CallsignCache(cfg.data_dir / "radioid-cache.json")
+        self.db = HistoryDB(cfg.data_dir / "hamcast.db")
+        self.working: set[int] = set()
         self.running: dict[str, ManagedStream] = {}
         self._links: dict[tuple, _RunningLink] = {}
         self._lock = asyncio.Lock()
@@ -138,7 +189,8 @@ class Service:
                     await self._stop_stream(sid)
             for sid, scfg in wanted.items():
                 if sid not in self.running:
-                    ms = ManagedStream(self.cfg, scfg, self.push_base, self.transcriber, self.callsigns)
+                    ms = ManagedStream(self.cfg, scfg, self.push_base, self.transcriber, self.callsigns,
+                                       self.db, self.working)
                     ms.task = asyncio.create_task(ms.run())
                     self.running[sid] = ms
                     log.info("started %s", sid)
@@ -194,6 +246,18 @@ class Service:
             except asyncio.TimeoutError:
                 pass
 
+    async def _expire_audio(self, stop: asyncio.Event) -> None:
+        """Hourly: delete audio older than audio_days; rows and text stay."""
+        while self.cfg.audio_days > 0 and not stop.is_set():
+            cutoff = time.time() - self.cfg.audio_days * 86400
+            for row_id, stream_id, audio in self.db.audio_before(cutoff):
+                (self.cfg.data_dir / "recordings" / stream_id / audio).unlink(missing_ok=True)
+                self.db.drop_audio(row_id)
+            try:
+                await asyncio.wait_for(stop.wait(), 3600)
+            except asyncio.TimeoutError:
+                pass
+
     async def run(self, stop: asyncio.Event) -> None:
         from .web import serve_dashboard
         await self.apply()
@@ -202,6 +266,7 @@ class Service:
                 *([self.bundled_icecast.run(stop)] if self.bundled_icecast else []),
                 *([self.transcriber.run(stop)] if self.transcriber else []),
                 self._poll_listeners(stop),
+                self._expire_audio(stop),
                 serve_dashboard(self, stop),
             )
         finally:

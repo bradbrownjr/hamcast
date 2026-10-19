@@ -1,6 +1,7 @@
 // ========== TYPES ==========
 
 export interface Heard {
+  id: number | null;
   talker: string;
   gateway: string | null;
   mode: string;
@@ -9,7 +10,7 @@ export interface Heard {
   recording: string | null;
   transcript: string | null;
   transcript_status:
-    | 'queued' | 'transcribing' | 'done' | 'no_speech' | 'too_short' | 'failed' | 'not_transcribed' | null;
+    | 'queued' | 'transcribing' | 'done' | 'no_speech' | 'too_short' | 'failed' | null;
 }
 
 export interface StreamStatus {
@@ -90,11 +91,11 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 export const api = {
   status: () => call<Status>('GET', '/api/status'),
-  /** Older transmissions from disk, newest first, before the named recording. */
-  history: (id: string, before?: string) =>
+  /** Older transmissions, newest first, that started before `before` (a start time). */
+  history: (id: string, before?: number) =>
     call<{ heard: Heard[]; more: boolean }>(
       'GET',
-      `/api/history/${id}` + (before ? `?before=${encodeURIComponent(before)}` : ''),
+      `/api/history/${id}` + (before !== undefined ? `?before=${before}` : ''),
     ),
   me: () => call<{ admin: boolean }>('GET', '/api/me'),
   login: (password: string) => call<{ admin: boolean }>('POST', '/api/login', { password }),

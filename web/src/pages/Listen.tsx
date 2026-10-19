@@ -149,10 +149,10 @@ function ConversationDialog({ s, status, onClose }: { s: StreamStatus | null; st
 
   const loadOlder = async () => {
     const oldest = conversation[conversation.length - 1];
-    if (!s || !oldest?.recording) return;
+    if (!s || !oldest) return;
     setLoadingOlder(true);
     try {
-      const r = await api.history(s.id, oldest.recording);
+      const r = await api.history(s.id, oldest.started);
       const el = scroller.current;
       if (el) keepPlace.current = { height: el.scrollHeight, top: el.scrollTop };
       setSeen((prev) => {
@@ -222,15 +222,15 @@ function ConversationDialog({ s, status, onClose }: { s: StreamStatus | null; st
             <Player s={s} status={status} />
           </DialogTitle>
           <DialogContent dividers ref={scroller} onScroll={onScroll}>
-            {/* Shows when this net keeps recordings to page back through */}
-            {s.record && conversation.length > 0 && (
+            {/* Shows once there is a conversation to page back through */}
+            {conversation.length > 0 && (
               <Box sx={{ textAlign: 'center', pb: 1 }}>
                 {more ? (
                   <Button size="small" onClick={loadOlder} disabled={loadingOlder}>
                     {loadingOlder ? 'Loading…' : 'Load older'}
                   </Button>
                 ) : (
-                  <Typography variant="caption" color="text.secondary">Start of the recordings</Typography>
+                  <Typography variant="caption" color="text.secondary">Start of the history</Typography>
                 )}
                 {olderError && <Alert severity="error" sx={{ mt: 1 }}>{olderError}</Alert>}
               </Box>

@@ -3,9 +3,9 @@
 Each recorded transmission is queued and transcribed one at a time, by an
 OpenAI-compatible HTTP endpoint (TranscriptionConfig.url: Speaches,
 hwdsl2/docker-whisper, whisper.cpp server, OpenAI...) or, with no URL, by
-the bundled faster-whisper. Results are written next to the WAV as
-<name>.json, appended to the stream's daily transcript-YYYYmmdd.txt as
-"HH:MM:SS TALKER: text", and attached to the Heard entry for the dashboard.
+the bundled faster-whisper. Results go on the Heard entry, to the caller's
+on_done (which saves them in the database), and into the net's daily
+transcript-YYYYmmdd.txt as "HH:MM:SS TALKER: text".
 """
 
 import asyncio
@@ -14,18 +14,12 @@ import logging
 import time
 import urllib.request
 import uuid
-import wave
 from pathlib import Path
+from typing import Callable
 
 from .config import TranscriptionConfig
-from .history import metadata
 
 log = logging.getLogger(__name__)
-
-
-def _duration(path: Path) -> float:
-    with wave.open(str(path)) as w:
-        return w.getnframes() / w.getframerate()
 
 
 class HttpBackend:
@@ -83,21 +77,12 @@ class Transcriber:
         self._queue: asyncio.Queue = asyncio.Queue()
         self.pending = 0
 
-    def submit(self, heard, stream_dir: Path) -> None:
-        """Queue a finished, recorded transmission."""
-        if not heard.recording:
-            return
-        try:
-            short = _duration(Path(heard.recording)) < self.cfg.min_seconds
-        except (OSError, EOFError, wave.Error):
-            short = True
-        if short:
-            # Whisper tends to invent text for near-silence (kerchunks, IDs).
-            heard.transcript_status = "too_short"
-            return
+    def submit(self, heard, on_done: Callable[[object, list | None], None]) -> None:
+        """Queue a recorded transmission. on_done(heard, segments) runs once
+        it has a transcript or has failed (segments is None then)."""
         heard.transcript_status = "queued"
         self.pending += 1
-        self._queue.put_nowait((heard, Path(heard.recording), stream_dir))
+        self._queue.put_nowait((heard, on_done))
 
     async def run(self, stop: asyncio.Event) -> None:
         loop = asyncio.get_running_loop()
@@ -109,24 +94,27 @@ class Transcriber:
             if not getter.done():
                 getter.cancel()
                 break
-            heard, wav, stream_dir = getter.result()
+            heard, on_done = getter.result()
             heard.transcript_status = "transcribing"
+            segments = None
             try:
-                result = await loop.run_in_executor(None, self.backend.transcribe, wav)
-                self._store(heard, wav, stream_dir, result)
+                result = await loop.run_in_executor(None, self.backend.transcribe, Path(heard.recording))
+                heard.transcript = result["text"] or None
                 heard.transcript_status = "done" if result["text"] else "no_speech"
+                segments = result["segments"]
+                if result["text"]:
+                    _append_daily(heard)
             except Exception as exc:
                 heard.transcript_status = "failed"
-                log.warning("transcribing %s failed: %s", wav.name, exc)
+                log.warning("transcribing %s failed: %s", Path(heard.recording).name, exc)
             finally:
                 self.pending -= 1
+            on_done(heard, segments)
 
-    def _store(self, heard, wav: Path, stream_dir: Path, result: dict) -> None:
-        heard.transcript = result["text"]
-        record = {**metadata(heard), **result}
-        wav.with_suffix(".json").write_text(json.dumps(record, indent=1))
-        if result["text"]:
-            day = time.strftime("%Y%m%d", time.localtime(heard.started))
-            stamp = time.strftime("%H:%M:%S", time.localtime(heard.started))
-            with open(stream_dir / f"transcript-{day}.txt", "a") as f:
-                f.write(f"{stamp} {heard.talker}: {result['text']}\n")
+
+def _append_daily(heard) -> None:
+    """The net's human-readable log: transcript-YYYYmmdd.txt beside its audio."""
+    day = time.strftime("%Y%m%d", time.localtime(heard.started))
+    stamp = time.strftime("%H:%M:%S", time.localtime(heard.started))
+    with open(Path(heard.recording).parent / f"transcript-{day}.txt", "a") as f:
+        f.write(f"{stamp} {heard.talker}: {heard.transcript}\n")

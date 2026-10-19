@@ -29,13 +29,12 @@ class FakeBackend:
 def test_status_follows_each_transmission(tmp_path):
     t = Transcriber(TranscriptionConfig(enabled=True, url="http://unused"), tmp_path)
     t.backend = FakeBackend({"talk": "hello", "kerchunk": "", "broken": RuntimeError("down")})
-    heard = {}
-    for name, secs in (("talk", 3), ("kerchunk", 2), ("broken", 2), ("short", 0.5)):
-        h = Heard(talker="N0CALL", gateway="", started=0, ended=secs,
-                  recording=str(_wav(tmp_path / f"{name}.wav", secs)))
-        t.submit(h, tmp_path)
+    heard, finished = {}, []
+    for name in ("talk", "kerchunk", "broken"):
+        h = Heard(talker="N0CALL", gateway="", started=0, ended=3,
+                  recording=str(_wav(tmp_path / f"{name}.wav", 3)))
+        t.submit(h, lambda h, segments, name=name: finished.append((name, segments)))
         heard[name] = h
-    assert heard["short"].transcript_status == "too_short"
     assert heard["talk"].transcript_status == "queued"
 
     async def drain():
@@ -48,5 +47,9 @@ def test_status_follows_each_transmission(tmp_path):
 
     asyncio.run(drain())
     assert {k: h.transcript_status for k, h in heard.items()} == {
-        "talk": "done", "kerchunk": "no_speech", "broken": "failed", "short": "too_short"}
-    assert heard["talk"].transcript == "hello"
+        "talk": "done", "kerchunk": "no_speech", "broken": "failed"}
+    assert heard["talk"].transcript == "hello" and heard["kerchunk"].transcript is None
+    assert finished == [("talk", []), ("kerchunk", []), ("broken", None)]
+    # Only real text goes in the human-readable daily log.
+    (log,) = tmp_path.glob("transcript-*.txt")
+    assert log.read_text().endswith("N0CALL: hello\n")

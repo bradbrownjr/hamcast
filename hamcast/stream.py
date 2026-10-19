@@ -39,9 +39,9 @@ class Heard:
     recording: str | None = None
     transcript: str | None = None
     # None when not transcribed at all; else queued, transcribing, done,
-    # no_speech (nothing recognizable), too_short, failed, or
-    # not_transcribed (recorded while hamcast was stopping, see history.py).
+    # no_speech (nothing recognizable), too_short or failed.
     transcript_status: str | None = None
+    id: int | None = None  # its row in the database (db.py)
 
     @property
     def seconds(self) -> float:

@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
-from . import directory, history
+from . import directory
 from .auth import COOKIE, SESSION_SECONDS, Auth
 from .config import StreamConfig
 
@@ -30,6 +30,7 @@ _STREAM_FIELDS = {f.name for f in fields(StreamConfig)}
 
 def _heard_json(h) -> dict:
     return {
+        "id": h.id,
         "talker": h.talker,
         "gateway": h.gateway,
         "mode": h.mode,
@@ -111,29 +112,25 @@ def build_app(service) -> FastAPI:
                 "transcribing": service.transcriber.pending if service.transcriber else None}
 
     @app.get("/api/history/{stream_id}")
-    async def stream_history(stream_id: str, before: str | None = None, limit: int = 50) -> dict:
-        """Older transmissions from the recordings on disk, newest first.
-        `before` is the recording file name of the oldest one already shown;
-        `more` says whether there are older ones still."""
-        scfg = service.store.get(stream_id)
-        if not scfg or (before is not None and "/" in before):
+    def stream_history(stream_id: str, before: float | None = None, limit: int = 50) -> dict:
+        """Older transmissions, newest first. `before` is the start time of
+        the oldest one already shown; `more` says whether older ones remain."""
+        if not service.store.get(stream_id):
             raise HTTPException(404)
-        stt = cfg.transcription
-        heard, more = await asyncio.get_running_loop().run_in_executor(
-            None, lambda: history.load(cfg.data_dir / "recordings" / stream_id, before=before,
-                                       limit=max(1, min(limit, 200)), min_seconds=stt.min_seconds,
-                                       transcribed=stt.enabled and scfg.transcribe))
+        heard, more = service.db.page(stream_id, cfg.data_dir / "recordings" / stream_id,
+                                      before=before, limit=max(1, min(limit, 200)))
         return {"heard": [_heard_json(h) for h in heard], "more": more}
 
     @app.get("/recordings/{stream_id}/{name}")
     def recording(stream_id: str, name: str) -> FileResponse:
         # Only plain filenames inside a configured stream's own directory.
-        if not service.store.get(stream_id) or "/" in name or not name.endswith(".wav"):
+        kind = {".wav": "audio/wav", ".mp3": "audio/mpeg"}.get(Path(name).suffix)
+        if not service.store.get(stream_id) or "/" in name or not kind:
             raise HTTPException(404)
         path = cfg.data_dir / "recordings" / stream_id / name
         if not path.is_file():
             raise HTTPException(404)
-        return FileResponse(path, media_type="audio/wav")
+        return FileResponse(path, media_type=kind)
 
     # ========== SIGN-IN ==========
 

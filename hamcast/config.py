@@ -82,6 +82,9 @@ class Config:
     # Password for the dashboard's Manage pages. Empty = generated once and
     # saved in <data_dir>/admin-password.txt.
     admin_password: str = ""
+    # Days to keep each transmission's audio; 0 keeps it forever. The
+    # transcript and details are always kept.
+    audio_days: int = 90
 
 
 # Environment variable -> (section, field, type). Empty variables are ignored.
@@ -91,6 +94,7 @@ ENV = {
     "HAMCAST_DATA_DIR": (None, "data_dir", Path),
     "HAMCAST_DASHBOARD_PORT": (None, "dashboard_port", int),
     "HAMCAST_ADMIN_PASSWORD": (None, "admin_password", str),
+    "HAMCAST_AUDIO_DAYS": (None, "audio_days", int),
     "HAMCAST_ICECAST_URL": ("icecast", "push_url", str),
     "HAMCAST_PUBLIC_URL": ("icecast", "public_url", str),
     "HAMCAST_BITRATE": ("icecast", "bitrate", str),
@@ -188,4 +192,5 @@ def load(path: str | Path, environ=os.environ) -> Config:
         data_dir=Path(raw.get("data_dir", "/data")),
         dashboard_port=int(raw.get("dashboard_port", 8080)),
         admin_password=str(raw.get("admin_password", "")),
+        audio_days=int(raw.get("audio_days", 90)),
     )

@@ -102,8 +102,8 @@ The web app is on port 8080 and the streams on port 8000
 
 - **Listen** (public): every net with a player, who is talking, and the
   conversation so far with each transmission's recording and transcript.
-  The full view pages back through every recording kept on disk, and a
-  restart picks up where it left off.
+  The full view pages back through the whole history, and a restart picks
+  up where it left off.
 - **Manage** (password): add, edit, start, stop and delete nets while
   hamcast runs. Pick a YSF reflector or DMR master from Pi-Star's public
   host lists, or type a host and port. The password is
@@ -138,11 +138,16 @@ can be set in `config.yaml` or with these environment variables, which win:
 | `HAMCAST_STT_URL` | built-in | Any OpenAI-compatible `/v1/audio/transcriptions` server. The built-in Whisper downloads its model into `data/models` on first use, so image updates don't download it again |
 | `HAMCAST_STT_MODEL` | small.en | Whisper model |
 | `HAMCAST_STT_API_KEY` | | If the STT server needs one |
+| `HAMCAST_AUDIO_DAYS` | 90 | Days to keep each transmission's audio (0 = forever). Transcripts and details are kept forever |
 | `PUID`, `PGID` | 99, 100 | Owner of files in `/data` (Docker) |
 | `TZ` | UTC | Time zone for file names |
 
-Transcripts are saved beside each recording as JSON (text and timed
-segments), and per stream per day as `transcript-YYYYMMDD.txt` lines of
+Every transmission is kept in `data/hamcast.db` (SQLite): net, time,
+length, talker, gateway, transcript with timed segments, and its audio
+file. Clips too short to transcribe (kerchunks, IDs) keep no audio. The
+rest are transcribed from the WAV as received, then compressed to MP3 in
+`data/recordings/<net>/`, and deleted after `HAMCAST_AUDIO_DAYS`. Each net
+also gets a readable log per day, `transcript-YYYYMMDD.txt`, of lines
 `HH:MM:SS CALLSIGN: text`.
 
 ## Development

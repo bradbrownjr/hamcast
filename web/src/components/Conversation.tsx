@@ -62,8 +62,6 @@ function TranscriptLine({ h }: { h: Heard }) {
       return muted('No speech recognized');
     case 'too_short':
       return muted('Too short to transcribe');
-    case 'not_transcribed':
-      return muted('Not transcribed');
     case 'failed':
       return <Typography variant="body2" color="error" sx={{ fontStyle: 'italic' }}>Transcription failed</Typography>;
     default:
@@ -94,7 +92,7 @@ function Message({ h, streamId }: { h: Heard; streamId: string }) {
 
 /** One key per transmission, the same whether it came live or from history. */
 export function heardKey(h: Heard) {
-  return h.recording ?? `${h.started}`;
+  return h.id != null ? `id${h.id}` : `t${h.started}`;
 }
 
 // ========== CONVERSATION ==========

@@ -12,7 +12,8 @@ requires-python = ">=3.11"
 dependencies = ["pyyaml>=6", "fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.optional-dependencies]
-dev = ["pytest>=9.0.3"]
+# httpx2 for Starlette 1.x's TestClient, httpx for older Starlette.
+dev = ["pytest>=9.0.3", "httpx2>=2.0", "httpx>=0.27"]
 # Built-in transcription when no external speech-to-text URL is set.
 whisper = ["faster-whisper>=1.2"]
 

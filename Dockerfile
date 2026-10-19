@@ -7,7 +7,7 @@ RUN /src/native/build.sh /out
 
 # ---- runtime ----
 FROM python:3.13-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg tzdata \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=native /out/libhcmbe.so /usr/local/lib/libhcmbe.so
 WORKDIR /app

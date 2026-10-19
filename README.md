@@ -80,6 +80,12 @@ cp .env.example .env                 # set Icecast passwords (and the same sourc
 docker compose up -d --build
 ```
 
+On Unraid, add the template from `unraid/hamcast.xml` (Docker > Add
+Container > Template URL:
+`https://raw.githubusercontent.com/bradbrownjr/hamcast/main/unraid/hamcast.xml`),
+put your `config.yaml` in the Config path, and point it at an Icecast
+server. The image is published as `ghcr.io/bradbrownjr/hamcast`.
+
 Dashboard on port 8080 (link state, who is talking, last heard, recordings,
 and a player per stream). Icecast on port 8000.
 

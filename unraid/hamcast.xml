@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>hamcast</Name>
+  <Repository>ghcr.io/bradbrownjr/hamcast:latest</Repository>
+  <Registry>https://github.com/bradbrownjr/hamcast/pkgs/container/hamcast</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/bradbrownjr/hamcast/issues</Support>
+  <Project>https://github.com/bradbrownjr/hamcast</Project>
+  <Overview>Streams amateur digital voice nets (YSF, DMR) to Icecast, receive-only. hamcast links to a reflector or DMR master as a single listen-only hotspot, decodes the audio in software, and pushes an MP3 stream per net to an Icecast server, with a dashboard showing who is talking and per-transmission recordings.&#xD;
+&#xD;
+Before first start, put a config.yaml in the Config path (copy config.example.yaml from the project page) with your callsign, your Icecast server's source password, and your streams. hamcast identifies itself with your callsign and DMR ID: never configure someone else's.</Overview>
+  <Category>Tools:Utilities MediaServer:Music</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/bradbrownjr/hamcast/main/unraid/hamcast.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/bradbrownjr/hamcast/main/unraid/icon.svg</Icon>
+  <ExtraParams>--restart unless-stopped</ExtraParams>
+  <PostArgs>serve --config /config/config.yaml</PostArgs>
+  <CPUset/>
+  <Requires>An Icecast server to push streams to.</Requires>
+  <Config Name="Dashboard port" Target="8080" Default="8080" Mode="tcp" Description="Status page: who is talking, last heard, recordings, a player per stream." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/hamcast/config" Mode="ro" Description="Holds config.yaml." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/hamcast/config</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/hamcast/data" Mode="rw" Description="Recordings (one WAV per transmission) and the DMR ID callsign cache." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/hamcast/data</Config>
+  <Config Name="TZ" Target="TZ" Default="America/New_York" Mode="" Description="Time zone for recording file names and the dashboard log." Type="Variable" Display="advanced" Required="false" Mask="false">America/New_York</Config>
+</Container>

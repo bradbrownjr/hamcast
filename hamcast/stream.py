@@ -76,7 +76,8 @@ class YsfStream:
             return
         heard.ended = time.time()
         if self.recorder:
-            self.recorder.end()
+            saved = self.recorder.end()
+            heard.recording = str(saved) if saved else None
         self.status.heard.appendleft(heard)
         self.status.current = None
         log.info("[%s] %s done, %.1f s", self.name, heard.talker, heard.seconds)
@@ -84,6 +85,10 @@ class YsfStream:
             self.on_transmission_end(heard)
 
     # ========== PACKET HANDLING ==========
+
+    def feed(self, pkt: YsfPacket) -> None:
+        """Decode one voice packet (live from the client, or replayed from a capture)."""
+        self._on_packet(pkt)
 
     def _on_packet(self, pkt: YsfPacket) -> None:
         fich = ysf.decode_fich(pkt.frame)
@@ -107,7 +112,7 @@ class YsfStream:
                 voices = [self.vocoder.decode_ambe2450(v) for v in ysf.decode_vd2_voice(pkt.frame)]
             elif dt == ysf.DT_VOICE_FR:
                 cur.mode = "VW"
-                voices = [self.vocoder.decode_imbe4400(v) for v in ysf.decode_vw_voice(pkt.frame)]
+                voices = [self.vocoder.decode_imbe7200x4400(v) for v in ysf.decode_vw_voice(pkt.frame, fich)]
             else:
                 # V/D mode 1 and data frames: not decoded yet, counted so the
                 # dashboard shows whether they actually occur.
@@ -129,6 +134,10 @@ class YsfStream:
             self.status.linked = self.client.linked
             if self.status.current and time.monotonic() - self._last_frame_at > TRANSMISSION_TIMEOUT:
                 self._end()
+
+    def finish(self) -> None:
+        """Close the transmission in progress (end of a replay)."""
+        self._end()
 
     async def run(self, stop: asyncio.Event) -> None:
         try:

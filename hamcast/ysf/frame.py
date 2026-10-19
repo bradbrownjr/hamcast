@@ -52,13 +52,18 @@ _IMBE_INTERLEAVE = [
     5, 10, 17, 22, 29, 34, 41, 46, 53, 58, 65, 70, 77, 82, 89, 94, 101, 106, 113, 118, 125, 130, 137, 142,
 ]
 
-# Which of the 144 de-interleaved VW bits are IMBE data, in mbelib's imbe_d
-# order: the 12 data bits of each Golay(23,12) word, the 11 data bits of each
-# Hamming(15,11) word, then the 7 uncoded bits (ysf.cpp::decode_vw).
-_VW_DATA_BITS = (
-    list(range(0, 12)) + list(range(23, 35)) + list(range(46, 58)) + list(range(69, 81))
-    + list(range(92, 103)) + list(range(107, 118)) + list(range(122, 133)) + list(range(137, 144))
-)
+# The 144 de-interleaved VW bits in transmission order are c0-c3 (Golay 23
+# bits each), c4-c6 (Hamming 15 bits each) and c7 (7 uncoded bits). mbelib
+# wants them as imbe_fr[8][23] with each vector's first bit at its highest
+# index (imbe7200x4400.c::mbe_eccImbe7200x4400Data).
+_VW_VECTOR_LENGTHS = (23, 23, 23, 23, 15, 15, 15, 7)
+_VW_TO_IMBE_FR = [0] * 144
+_n = 0
+for _v, _length in enumerate(_VW_VECTOR_LENGTHS):
+    for _k in range(_length):
+        _VW_TO_IMBE_FR[_n] = _v * 23 + (_length - 1 - _k)
+        _n += 1
+del _n, _v, _length, _k
 
 
 @dataclass
@@ -130,21 +135,22 @@ def decode_vd2_voice(frame: bytes) -> list[bytes]:
     return voices
 
 
-def decode_vw_voice(frame: bytes) -> list[bytes]:
-    """Five IMBE frames from a Voice FR frame, each as 88 one-bit bytes."""
+def decode_vw_voice(frame: bytes, fich: "Fich | None") -> list[bytes]:
+    """Raw IMBE 7200x4400 frames from a Voice FR frame, each laid out as
+    mbelib's imbe_fr[8][23] (184 one-bit bytes). FEC and de-whitening are
+    left to mbelib so it knows how damaged each frame was.
+
+    Normally five. The first frame after the header (FN 0, FT 1) carries 45
+    bytes of data in its first half and only two voice channels, at payload
+    offsets 54 and 72 (MMDVMHost YSFControl.cpp, "the first packet after the
+    header is odd", and YSFPayload.cpp::processVoiceFRModeAudio2)."""
     data = frame[SYNC_LEN + FICH_LEN:]
+    first = 3 if fich is not None and fich.fn == 0 and fich.ft == 1 else 0
     voices = []
-    for j in range(5):
+    for j in range(first, 5):
         vch = data[j * 18:(j + 1) * 18]
-        bit = [read_bit(vch, n) for n in _IMBE_INTERLEAVE]
-
-        c0 = 0
-        for i in range(12):
-            c0 = (c0 << 1) | bit[i]
-        p = 16 * c0
-        for i in range(114):
-            p = (173 * p + 13849) % 65536
-            bit[i + 23] ^= 1 if p >= 32768 else 0
-
-        voices.append(bytes(bit[i] for i in _VW_DATA_BITS))
+        fr = bytearray(8 * 23)
+        for i, n in enumerate(_IMBE_INTERLEAVE):
+            fr[_VW_TO_IMBE_FR[i]] = read_bit(vch, n)
+        voices.append(bytes(fr))
     return voices

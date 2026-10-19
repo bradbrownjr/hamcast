@@ -7,6 +7,9 @@
       Link to a YSF reflector receive-only, write each transmission to a WAV
       in DIR, and print what was heard. --capture FILE also keeps the raw
       packets so the same audio can be re-decoded with another vocoder.
+
+  python -m hamcast replay-ysf CAPTURE [--out DIR]
+      Decode a --capture file offline into per-transmission WAVs.
 """
 
 import argparse
@@ -30,6 +33,20 @@ async def _probe(args: argparse.Namespace) -> None:
     print(f"frames ok={s.frames_ok} bad_fich={s.frames_bad_fich} unsupported={s.frames_unsupported}")
     for h in reversed(s.heard):
         print(f"{h.talker:10} {h.gateway:10} {h.mode:3} {h.seconds:5.1f}s {h.recording}")
+
+
+def _replay(args: argparse.Namespace) -> None:
+    from .ysf.client import parse_voice
+
+    stream = YsfStream("replay", "", 0, "", record_dir=Path(args.out))
+    with open(args.capture, "rb") as cap:
+        while header := cap.read(2):
+            pkt = parse_voice(cap.read(int.from_bytes(header, "big")))
+            if pkt:
+                stream.feed(pkt)
+    stream.finish()
+    s = stream.status
+    print(f"frames ok={s.frames_ok} bad_fich={s.frames_bad_fich} unsupported={s.frames_unsupported}")
 
 
 async def _serve(args: argparse.Namespace) -> None:
@@ -58,6 +75,10 @@ def main() -> None:
     p.add_argument("--out", default="recordings")
     p.add_argument("--capture", help="append raw YSFD packets to this file")
 
+    p = sub.add_parser("replay-ysf", help="decode a probe-ysf --capture file to WAV files")
+    p.add_argument("capture")
+    p.add_argument("--out", default="recordings")
+
     p = sub.add_parser("serve", help="run all configured streams and the dashboard")
     p.add_argument("--config", default="/config/config.yaml")
 
@@ -66,6 +87,8 @@ def main() -> None:
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     if args.command == "probe-ysf":
         asyncio.run(_probe(args))
+    elif args.command == "replay-ysf":
+        _replay(args)
     elif args.command == "serve":
         asyncio.run(_serve(args))
 

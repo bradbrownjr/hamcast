@@ -30,7 +30,7 @@ def _load() -> ctypes.CDLL:
     lib.hc_new.restype = ctypes.c_void_p
     lib.hc_reset.argtypes = [ctypes.c_void_p]
     lib.hc_free.argtypes = [ctypes.c_void_p]
-    for name in ("hc_decode_ambe2450", "hc_decode_ambe2400", "hc_decode_imbe4400"):
+    for name in ("hc_decode_ambe2450", "hc_decode_ambe2400", "hc_decode_imbe7200x4400"):
         fn = getattr(lib, name)
         fn.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_int]
         fn.restype = ctypes.c_int
@@ -68,8 +68,9 @@ class Vocoder:
     def decode_ambe2400(self, bits49: bytes) -> bytes:
         return self._run(self._lib.hc_decode_ambe2400, bits49)
 
-    def decode_imbe4400(self, bits88: bytes) -> bytes:
-        return self._run(self._lib.hc_decode_imbe4400, bits88)
+    def decode_imbe7200x4400(self, frame184: bytes) -> bytes:
+        """A raw FEC-coded IMBE frame laid out as imbe_fr[8][23] -> 320 bytes of s16le PCM."""
+        return self._run(self._lib.hc_decode_imbe7200x4400, frame184)
 
     def __del__(self) -> None:
         if getattr(self, "_state", None):

@@ -8,9 +8,10 @@ stream. People without a radio, a hotspot, or an app can listen to a net from
 a link, and net-logging tools such as [ECTLogger](https://github.com/bradbrownjr/ectlogger)
 can play it in the page.
 
-> **Status: early development.** YSF receive, software decode, the Icecast
-> push and the dashboard work; decode quality has not yet been checked
-> against live traffic. DMR, connection modes and transcription are next.
+> **Status: early development.** YSF receive and software decode are
+> verified on a live net (both DN and VW voice, intelligible enough for
+> Whisper to transcribe callsigns and names). The Icecast push and dashboard
+> work. DMR, connection modes and transcription are next.
 
 ## How it works
 
@@ -70,7 +71,8 @@ python3 -m pytest tests
 ```
 
 `probe-ysf` writes one WAV per transmission. `--capture FILE` also saves the
-raw packets so the same audio can be re-decoded later.
+raw packets, and `python3 -m hamcast replay-ysf FILE --out DIR` decodes them
+again offline, so decoder changes can be compared on identical audio.
 
 ## Credits
 

@@ -35,6 +35,19 @@ class YsfPacket:
     end_of_stream: bool
 
 
+def parse_voice(data: bytes) -> YsfPacket | None:
+    """Parse one YSFD datagram, or None if it isn't one."""
+    if len(data) != 155 or data[:4] != b"YSFD":
+        return None
+    return YsfPacket(
+        gateway=data[4:14].decode("ascii", "replace").strip(),
+        src=data[14:24].decode("ascii", "replace").strip(),
+        dst=data[24:34].decode("ascii", "replace").strip(),
+        end_of_stream=bool(data[34] & 0x01),
+        frame=data[35:155],
+    )
+
+
 def _pad(callsign: str) -> bytes:
     return callsign.upper().encode("ascii")[:10].ljust(10, b" ")
 
@@ -71,16 +84,10 @@ class YsfClient:
             if not self.linked:
                 log.info("linked to %s:%d as %s", self.host, self.port, self.callsign)
             self.linked = True
-        elif len(data) == 155 and data[:4] == b"YSFD":
+        elif (pkt := parse_voice(data)) is not None:
             if self.on_raw:
                 self.on_raw(data)
-            self.on_packet(YsfPacket(
-                gateway=data[4:14].decode("ascii", "replace").strip(),
-                src=data[14:24].decode("ascii", "replace").strip(),
-                dst=data[24:34].decode("ascii", "replace").strip(),
-                end_of_stream=bool(data[34] & 0x01),
-                frame=data[35:155],
-            ))
+            self.on_packet(pkt)
 
     async def run(self, stop: asyncio.Event) -> None:
         """Stay linked until stop is set, relinking whenever the reflector goes quiet."""

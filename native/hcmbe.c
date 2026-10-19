@@ -11,6 +11,7 @@
  * samples at 8 kHz.
  */
 #include <stdlib.h>
+#include <string.h>
 #include "mbelib.h"
 
 typedef struct {
@@ -58,12 +59,20 @@ int hc_decode_ambe2400(hc_state *s, char *ambe_d, short *pcm, int uvquality)
     return errs2;
 }
 
-/* IMBE 7200x4400 (YSF Voice FR / "VW", P25). imbe_d: 88 chars, one bit each. */
-int hc_decode_imbe4400(hc_state *s, char *imbe_d, short *pcm, int uvquality)
+/* IMBE 7200x4400 (YSF Voice FR / "VW", P25 phase 1). imbe_fr: the raw
+ * 144-bit frame as mbelib's imbe_fr[8][23], one bit per char, still
+ * FEC-coded and PN-whitened. mbelib corrects c0, de-whitens, corrects c1-c6
+ * and feeds the error count to the decoder, which repeats or mutes a frame
+ * that is too damaged to play. Copied first because mbelib corrects in place
+ * and the caller's buffer may be read-only. */
+int hc_decode_imbe7200x4400(hc_state *s, const char *imbe_fr, short *pcm, int uvquality)
 {
     int errs = 0, errs2 = 0;
     char err_str[64];
-    mbe_processImbe4400Data(pcm, &errs, &errs2, err_str, imbe_d,
-                            &s->cur, &s->prev, &s->prev_enhanced, uvquality);
+    char fr[8][23];
+    char imbe_d[88];
+    memcpy(fr, imbe_fr, sizeof(fr));
+    mbe_processImbe7200x4400Frame(pcm, &errs, &errs2, err_str, fr, imbe_d,
+                                  &s->cur, &s->prev, &s->prev_enhanced, uvquality);
     return errs2;
 }

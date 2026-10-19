@@ -121,6 +121,7 @@ class TransmissionRecorder(PcmSink):
         self.directory = directory
         self._wav: wave.Wave_write | None = None
         self.current_path: Path | None = None
+        self._frames = 0
 
     def begin(self, talker: str) -> Path:
         self.end()
@@ -128,20 +129,31 @@ class TransmissionRecorder(PcmSink):
         stamp = time.strftime("%Y%m%d-%H%M%S")
         safe = "".join(c for c in talker if c.isalnum() or c in "-/").replace("/", "-") or "unknown"
         self.current_path = self.directory / f"{stamp}_{safe}.wav"
+        n = 2
+        while self.current_path.exists():
+            # Same talker twice in one second (or a fast offline replay).
+            self.current_path = self.directory / f"{stamp}_{safe}-{n}.wav"
+            n += 1
         self._wav = wave.open(str(self.current_path), "wb")
         self._wav.setnchannels(1)
         self._wav.setsampwidth(2)
         self._wav.setframerate(SAMPLE_RATE)
+        self._frames = 0
         return self.current_path
 
     def write(self, pcm: bytes) -> None:
         if self._wav:
             self._wav.writeframes(pcm)
+            self._frames += 1
 
     def end(self) -> Path | None:
+        """Close the current WAV. A transmission with no voice (a kerchunk) leaves no file."""
         path = self.current_path
         if self._wav:
             self._wav.close()
+            if not self._frames:
+                path.unlink(missing_ok=True)
+                path = None
         self._wav = None
         self.current_path = None
         return path

@@ -1,6 +1,6 @@
 # ---- build mbelib + shim ----
 FROM python:3.13-slim AS native
-RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev git ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY native/ /src/native/
 RUN /src/native/build.sh /out

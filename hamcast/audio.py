@@ -26,6 +26,14 @@ SILENCE = bytes(FRAME_BYTES)
 # normal packet jitter doesn't chop the audio. 10 frames = 200 ms.
 PREBUFFER_FRAMES = 10
 
+# Listener-side cleanup, applied to the stream only (recordings stay raw for
+# STT). The high-pass removes vocoder rumble below the voice band;
+# dynaudnorm evens out talkers, who arrive anywhere from about -20 to
+# -50 dBFS, without lifting the digital silence between transmissions.
+# Its 250 ms frames over a 15-frame window add about 2 s of delay, which is
+# small next to Icecast's own buffering.
+STREAM_FILTER = "highpass=f=150,dynaudnorm=f=250:g=15:p=0.9:m=20:s=0"
+
 
 class PcmSink:
     def write(self, pcm: bytes) -> None: ...
@@ -80,7 +88,8 @@ class FfmpegSink(PcmSink):
     async def start(self) -> None:
         cmd = [
             "ffmpeg", "-hide_banner", "-loglevel", "warning",
-            "-f", "s16le", "-ar", str(SAMPLE_RATE), "-ac", "1", "-i", "pipe:0",
+            "-f", "s16le", "-ar", str(SAMPLE_RATE), "-ch_layout", "mono", "-i", "pipe:0",
+            "-af", STREAM_FILTER,
             # 8 kHz MP3 isn't playable everywhere; 22.05 kHz is universally supported.
             "-ar", "22050", "-c:a", "libmp3lame", "-b:a", self.bitrate,
             "-content_type", "audio/mpeg",

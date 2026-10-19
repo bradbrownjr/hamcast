@@ -1,4 +1,4 @@
-"""ctypes binding to libhcmbe.so (mbelib plus native/hcmbe.c).
+"""ctypes binding to libhcmbe.so (mbelib-neo plus native/hcmbe.c).
 
 One Vocoder per audio stream: mbelib carries synthesis state between frames,
 so two streams sharing an instance would bleed into each other.
@@ -9,9 +9,6 @@ import os
 from pathlib import Path
 
 SAMPLES_PER_FRAME = 160  # 20 ms at 8 kHz
-
-# mbelib's unvoiced-synthesis quality, 1-64. DroidStar and DSD use 3.
-UV_QUALITY = 3
 
 
 def _load() -> ctypes.CDLL:
@@ -32,7 +29,7 @@ def _load() -> ctypes.CDLL:
     lib.hc_free.argtypes = [ctypes.c_void_p]
     for name in ("hc_decode_ambe2450", "hc_decode_ambe2400", "hc_decode_imbe7200x4400"):
         fn = getattr(lib, name)
-        fn.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_int]
+        fn.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
         fn.restype = ctypes.c_int
     return lib
 
@@ -58,7 +55,7 @@ class Vocoder:
         self._lib.hc_reset(self._state)
 
     def _run(self, fn, bits: bytes) -> bytes:
-        fn(self._state, bits, self._pcm, UV_QUALITY)
+        fn(self._state, bits, self._pcm)
         return bytes(self._pcm)
 
     def decode_ambe2450(self, bits49: bytes) -> bytes:

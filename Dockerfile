@@ -11,9 +11,16 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && rm -rf /var/lib/apt/lists/*
 COPY --from=native /out/libhcmbe.so /usr/local/lib/libhcmbe.so
 WORKDIR /app
-COPY pyproject.toml README.md LICENSE ./
+# Dependencies first, in their own layer (faster-whisper alone is most of
+# the image), so an ordinary hamcast update only changes the small layer
+# below. The list comes from pyproject.toml, so it can't drift.
+COPY pyproject.toml ./
+RUN python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb'))['project']; \
+print('\n'.join(p['dependencies'] + p['optional-dependencies']['whisper']))" > /tmp/requirements.txt \
+    && pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
+COPY README.md LICENSE ./
 COPY hamcast/ hamcast/
-RUN pip install --no-cache-dir ".[whisper]"
+RUN pip install --no-cache-dir --no-deps .
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 ENV HAMCAST_LIBHCMBE=/usr/local/lib/libhcmbe.so \
     HOME=/tmp \

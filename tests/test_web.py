@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from hamcast.config import Config, IcecastConfig, StreamConfig
 from hamcast.service import Service
+from hamcast import web
 from hamcast.web import build_app
 
 YSF = {"id": "ufb", "name": "UFB", "type": "ysf", "host": "127.0.0.1", "port": 42000,
@@ -67,7 +68,22 @@ def test_logout(client):
     assert client.get("/api/me").json() == {"admin": False}
 
 
-def test_spa_fallback_never_serves_outside_static(client):
+def test_spa_serves_build_and_never_outside_it(client, tmp_path, monkeypatch):
+    static = tmp_path / "site" / "static"
+    (static / "assets").mkdir(parents=True)
+    (static / "index.html").write_text("INDEX")
+    (static / "assets" / "app.js").write_text("JS")
+    (tmp_path / "site" / "secret.txt").write_text("SECRET")
+    monkeypatch.setattr(web, "STATIC", static)
+    assert client.get("/").text == "INDEX"
+    assert client.get("/manage").text == "INDEX"
+    assert client.get("/assets/app.js").text == "JS"
     assert client.get("/api/nope").status_code == 404
-    assert client.get("/../../etc/passwd").status_code in (200, 404)
-    assert "root:" not in client.get("/..%2F..%2Fetc%2Fpasswd").text
+    for path in ("/../secret.txt", "/..%2Fsecret.txt", "/assets/..%2F..%2Fsecret.txt"):
+        assert "SECRET" not in client.get(path).text
+
+
+def test_unbuilt_web_app_says_so(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(web, "STATIC", tmp_path / "missing")
+    r = client.get("/")
+    assert r.status_code == 503 and "npm run build" in r.text

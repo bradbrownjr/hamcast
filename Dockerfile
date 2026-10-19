@@ -7,7 +7,7 @@ RUN /src/native/build.sh /out
 
 # ---- runtime ----
 FROM python:3.13-slim
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg tzdata icecast2 \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg tzdata icecast2 media-types \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=native /out/libhcmbe.so /usr/local/lib/libhcmbe.so
 WORKDIR /app

@@ -14,6 +14,7 @@ import json
 import logging
 import secrets
 import shutil
+import urllib.parse
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -67,6 +68,14 @@ def push_url(cfg: Config) -> str:
     return f"icecast://source:{cfg.icecast.source_password}@127.0.0.1:{cfg.icecast.port}"
 
 
+def _hostname(cfg: Config) -> str:
+    """The host listeners reach, for the URLs Icecast reports."""
+    ice = cfg.icecast
+    if ice.hostname != "localhost" or not ice.public_url:
+        return ice.hostname
+    return urllib.parse.urlsplit(ice.public_url).hostname or ice.hostname
+
+
 def render_xml(cfg: Config) -> str:
     ice = cfg.icecast
     share = _share_dir()
@@ -76,7 +85,7 @@ def render_xml(cfg: Config) -> str:
     return f"""<icecast>
     <location>hamcast</location>
     <admin>hamcast</admin>
-    <hostname>{escape(ice.hostname)}</hostname>
+    <hostname>{escape(_hostname(cfg))}</hostname>
     <limits>
         <clients>500</clients>
         <sources>{sources}</sources>
@@ -96,8 +105,10 @@ def render_xml(cfg: Config) -> str:
     <listen-socket>
         <port>{ice.port}</port>
     </listen-socket>
+    <!-- Lets web apps (e.g. ECTLogger's player) read the stream and status.
+         No comments inside http-headers: Icecast stops parsing headers at
+         the first child that isn't <header> (cfgfile.c _parse_http_headers). -->
     <http-headers>
-        <!-- Lets web apps (e.g. ECTLogger's player) read the stream and status. -->
         <header name="Access-Control-Allow-Origin" value="*" />
     </http-headers>
     <fileserve>1</fileserve>

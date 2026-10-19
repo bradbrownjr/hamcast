@@ -36,3 +36,16 @@ def test_bundled_icecast_passwords_persist_and_xml_is_valid(tmp_path):
     doc = xml.dom.minidom.parseString(icecast_server.render_xml(cfg2))
     assert doc.getElementsByTagName("source-password")[0].firstChild.data == first
     assert icecast_server.push_url(cfg2).startswith("icecast://source:")
+
+
+def test_http_headers_block_has_only_header_children(tmp_path):
+    # Icecast stops reading <http-headers> at the first non-<header> child,
+    # so a comment there silently drops the CORS header.
+    p = _write(tmp_path, f"callsign: KC1JMH\ndata_dir: {tmp_path}\nstreams: []\n")
+    cfg = load(p, environ={"HAMCAST_PUBLIC_URL": "http://10.0.0.5:8010"})
+    icecast_server.ensure_passwords(cfg)
+    doc = xml.dom.minidom.parseString(icecast_server.render_xml(cfg))
+    block = doc.getElementsByTagName("http-headers")[0]
+    kids = [n for n in block.childNodes if n.nodeType != n.TEXT_NODE]
+    assert [n.tagName for n in kids] == ["header"]
+    assert doc.getElementsByTagName("hostname")[0].firstChild.data == "10.0.0.5"

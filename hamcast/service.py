@@ -56,7 +56,9 @@ class ManagedStream:
         while not stop.is_set():
             if not self.sink.alive():
                 await self.sink.start()
-                await asyncio.sleep(2)
+                # Icecast only accepts metadata once the source is connected,
+                # which takes a few seconds after ffmpeg starts.
+                await asyncio.sleep(10)
                 self._set_title(IDLE_TITLE)
             await asyncio.sleep(5)
 

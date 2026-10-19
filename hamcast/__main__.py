@@ -1,5 +1,8 @@
 """hamcast command line.
 
+  python -m hamcast serve --config config.yaml
+      Run every configured stream, push to Icecast, serve the dashboard.
+
   python -m hamcast probe-ysf HOST PORT CALLSIGN [--seconds N] [--out DIR]
       Link to a YSF reflector receive-only, write each transmission to a WAV
       in DIR, and print what was heard. --capture FILE also keeps the raw
@@ -29,6 +32,19 @@ async def _probe(args: argparse.Namespace) -> None:
         print(f"{h.talker:10} {h.gateway:10} {h.mode:3} {h.seconds:5.1f}s {h.recording}")
 
 
+async def _serve(args: argparse.Namespace) -> None:
+    import signal
+
+    from .config import load
+    from .service import Service
+
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
+    await Service(load(args.config)).run(stop)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="hamcast")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -42,11 +58,16 @@ def main() -> None:
     p.add_argument("--out", default="recordings")
     p.add_argument("--capture", help="append raw YSFD packets to this file")
 
+    p = sub.add_parser("serve", help="run all configured streams and the dashboard")
+    p.add_argument("--config", default="/config/config.yaml")
+
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     if args.command == "probe-ysf":
         asyncio.run(_probe(args))
+    elif args.command == "serve":
+        asyncio.run(_serve(args))
 
 
 if __name__ == "__main__":

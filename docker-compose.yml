@@ -1,0 +1,21 @@
+services:
+  icecast:
+    image: libretime/icecast:2.4.4
+    restart: unless-stopped
+    environment:
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?set in .env}
+      ICECAST_ADMIN_PASSWORD: ${ICECAST_ADMIN_PASSWORD:?set in .env}
+      ICECAST_RELAY_PASSWORD: ${ICECAST_RELAY_PASSWORD:?set in .env}
+    ports:
+      - "8000:8000"
+
+  hamcast:
+    build: .
+    restart: unless-stopped
+    command: ["serve", "--config", "/config/config.yaml"]
+    depends_on: [icecast]
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      - ./data:/data
+    ports:
+      - "8080:8080"

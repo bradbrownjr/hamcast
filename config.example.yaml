@@ -1,0 +1,27 @@
+# hamcast configuration. Copy to config.yaml and edit.
+
+# Your own callsign. hamcast links to reflectors as this callsign, receive-only.
+# Never use someone else's callsign or a made-up one.
+callsign: N0CALL
+
+icecast:
+  # Where to push streams, with Icecast's source password. The bundled
+  # compose file runs Icecast as "icecast"; point this at a remote Icecast
+  # to publish elsewhere.
+  push_url: icecast://source:CHANGE-ME@icecast:8000
+  # Base URL listeners use; the dashboard builds its players from this.
+  public_url: http://localhost:8000
+  bitrate: 32k
+
+data_dir: /data          # recordings go in <data_dir>/recordings/<stream id>/
+dashboard_port: 8080
+
+streams:
+  - id: ufb
+    name: UFB New England
+    description: UFB New England net via XLXUFB
+    type: ysf
+    host: 97.107.140.110   # US-XLXUFB, YSF 62148
+    port: 42000
+    mount: /ufb
+    record: true

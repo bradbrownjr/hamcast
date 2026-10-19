@@ -8,8 +8,9 @@ stream. People without a radio, a hotspot, or an app can listen to a net from
 a link, and net-logging tools such as [ECTLogger](https://github.com/bradbrownjr/ectlogger)
 can play it in the page.
 
-> **Status: early development.** YSF receive and software decode work; the
-> stream service, dashboard, DMR, recording and transcription are in progress.
+> **Status: early development.** YSF receive, software decode, the Icecast
+> push and the dashboard work; decode quality has not yet been checked
+> against live traffic. DMR, connection modes and transcription are next.
 
 ## How it works
 
@@ -48,6 +49,17 @@ through a small C shim in `native/`. **AMBE+2 is covered by DVSI patents**
 [blip25-mbe](https://github.com/openBLIP25/blip25-mbe) project). Software AMBE
 decoding is common practice for amateur and research use; assess the
 patent position yourself before using hamcast commercially.
+
+## Running
+
+```sh
+cp config.example.yaml config.yaml   # set your callsign and streams
+cp .env.example .env                 # set Icecast passwords (and the same source password in config.yaml)
+docker compose up -d --build
+```
+
+Dashboard on port 8080 (link state, who is talking, last heard, recordings,
+and a player per stream). Icecast on port 8000.
 
 ## Development
 

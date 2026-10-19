@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "hamcast"
 version = "0.1.0"
@@ -5,7 +9,7 @@ description = "Stream amateur digital voice nets (YSF, DMR) to Icecast, receive-
 readme = "README.md"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["pyyaml>=6", "fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
@@ -15,3 +19,9 @@ hamcast = "hamcast.__main__:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["hamcast*"]
+
+[tool.setuptools.package-data]
+hamcast = ["dashboard.html"]

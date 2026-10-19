@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hamcast</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1b1f24; --muted: #5d6673;
+    --line: #e1e4e8; --ok: #1a7f37; --bad: #b42318; --live: #c2410c; --accent: #1f6feb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216; --card: #171b21; --text: #e6e8eb; --muted: #9aa3ad;
+      --line: #2a3038; --ok: #3fb950; --bad: #f85149; --live: #fb923c; --accent: #58a6ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 20px 16px 8px; max-width: 980px; margin: 0 auto; display: flex;
+           align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  header span { color: var(--muted); }
+  main { max-width: 980px; margin: 0 auto; padding: 8px 16px 40px; display: grid; gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: start; }
+  .name { font-size: 18px; font-weight: 600; margin: 0; }
+  .src { color: var(--muted); font-size: 13px; font-family: ui-monospace, monospace; }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.ok { color: var(--ok); border-color: currentColor; }
+  .pill.bad { color: var(--bad); border-color: currentColor; }
+  .now { margin: 14px 0 6px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); }
+  .now.live { border-color: var(--live); }
+  .now .call { font-size: 20px; font-weight: 700; color: var(--live); }
+  .now.idle { color: var(--muted); }
+  audio { width: 100%; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num { font-variant-numeric: tabular-nums; }
+  a { color: var(--accent); }
+  .wrap { overflow-x: auto; }
+  .empty { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<header><h1>hamcast</h1><span id="who"></span></header>
+<main id="streams"><p class="empty">Loading…</p></main>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const t = epoch => new Date(epoch * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
+const players = {};  // keep <audio> elements across refreshes so playback isn't interrupted
+
+function render(data) {
+  document.getElementById("who").textContent = `linked as ${data.callsign}`;
+  const root = document.getElementById("streams");
+  if (!data.streams.length) { root.innerHTML = '<p class="empty">No streams configured.</p>'; return; }
+  for (const s of data.streams) {
+    let card = document.getElementById("s-" + s.id);
+    if (!card) {
+      card = document.createElement("section");
+      card.className = "card"; card.id = "s-" + s.id;
+      card.innerHTML = '<div class="top"><div><p class="name"></p><div class="src"></div></div><div class="pills"></div></div>'
+        + '<div class="now"></div><div class="player"></div><div class="wrap"><table><thead><tr><th>Time</th><th>Talker</th><th>Via</th><th>Mode</th><th>Length</th><th>Recording</th></tr></thead><tbody></tbody></table></div>';
+      root.querySelector(".empty")?.remove();
+      root.appendChild(card);
+      if (s.listen_url) {
+        const a = document.createElement("audio");
+        a.controls = true; a.preload = "none"; a.src = s.listen_url;
+        card.querySelector(".player").appendChild(a);
+        players[s.id] = a;
+      }
+    }
+    card.querySelector(".name").textContent = s.name;
+    card.querySelector(".src").textContent = s.source;
+    card.querySelector(".pills").innerHTML =
+      `<span class="pill ${s.linked ? "ok" : "bad"}">${s.linked ? "linked" : "not linked"}</span>`
+      + `<span class="pill ${s.encoder_up ? "ok" : "bad"}">${s.encoder_up ? "streaming" : "encoder down"}</span>`
+      + `<span class="pill">${s.listeners} listening</span>`;
+    const now = card.querySelector(".now");
+    if (s.current) {
+      now.className = "now live";
+      now.innerHTML = `<span class="call">${esc(s.current.talker)}</span> ${s.current.gateway ? "via " + esc(s.current.gateway) : ""} · ${esc(s.current.mode)} · ${s.current.seconds}s`;
+    } else {
+      now.className = "now idle";
+      now.textContent = "No one transmitting";
+    }
+    card.querySelector("tbody").innerHTML = s.heard.length ? s.heard.map(h =>
+      `<tr><td class="num">${t(h.started)}</td><td>${esc(h.talker)}</td><td>${esc(h.gateway)}</td><td>${esc(h.mode)}</td>`
+      + `<td class="num">${h.seconds}s</td><td>${h.recording ? `<a href="recordings/${encodeURIComponent(s.id)}/${encodeURIComponent(h.recording)}">wav</a>` : ""}</td></tr>`
+    ).join("") : '<tr><td colspan="6" class="empty">Nothing heard yet</td></tr>';
+  }
+}
+
+async function tick() {
+  try { render(await (await fetch("api/status")).json()); } catch (e) { /* keep last view */ }
+}
+tick(); setInterval(tick, 2000);
+</script>
+</body>
+</html>

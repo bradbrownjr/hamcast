@@ -95,6 +95,13 @@ class FfmpegSink(PcmSink):
 
     def write(self, pcm: bytes) -> None:
         if self.alive() and self._proc.stdin:
+            # If Icecast stops accepting data, ffmpeg stops reading and the
+            # pipe backs up in memory. ~30 s of audio means it is stuck:
+            # kill it and let the keeper start a fresh one.
+            if self._proc.stdin.transport.get_write_buffer_size() > 30 * SAMPLE_RATE * 2:
+                log.warning("ffmpeg for %s stopped reading; restarting", _redact(self.icecast_url))
+                self._proc.kill()
+                return
             self._proc.stdin.write(pcm)
 
     def close(self) -> None:

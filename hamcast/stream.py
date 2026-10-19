@@ -54,6 +54,7 @@ class YsfStream:
         self.client = YsfClient(host, port, callsign, self._on_packet)
         self._last_frame_at = 0.0
         self._dt = ysf.DT_VD_MODE2
+        self.on_transmission_start = None  # optional callback(Heard)
         self.on_transmission_end = None  # optional callback(Heard)
 
     # ========== TRANSMISSION TRACKING ==========
@@ -66,6 +67,8 @@ class YsfStream:
             heard.recording = str(self.recorder.begin(heard.talker))
         self.status.current = heard
         log.info("[%s] %s via %s", self.name, heard.talker, heard.gateway)
+        if self.on_transmission_start:
+            self.on_transmission_start(heard)
 
     def _end(self) -> None:
         heard = self.status.current

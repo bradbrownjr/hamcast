@@ -42,7 +42,8 @@ streams:
   # (at most 5 per link). Pick the master that carries the network you want:
   # NEDECN talkgroups come only from IPSC2-NEDECN or IPSC2-CAN-TRBO, both on
   # 44-net (AMPRNet), so the host needs a route to 44.0.0.0/8. IPSC2-NEWENGLAND
-  # carries Brandmeister talkgroups, not NEDECN's.
+  # carries Brandmeister talkgroups, not NEDECN's. Leave NEDECN talkgroups on
+  # TS2: IPSC2-NEDECN did not deliver TG3123 to a TS1 static (2026-10-19).
   # - id: dirigo
   #   name: ME Dirigo Net
   #   description: Maine Dirigo Net, NEDECN TG 3123

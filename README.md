@@ -6,12 +6,12 @@ hamcast links to a digital voice reflector **receive-only**, decodes the
 audio in software, and publishes it as an ordinary Icecast/Shoutcast MP3
 stream. People without a radio, a hotspot, or an app can listen to a net from
 a link, and net-logging tools such as [ECTLogger](https://github.com/bradbrownjr/ectlogger)
-can play it in the page.
+can link to it from the net.
 
 > **Status: early development.** YSF receive and software decode are
 > verified on a live net (both DN and VW voice, intelligible enough for
 > Whisper to transcribe callsigns and names). DMR Homebrew login and decode
-> are verified against a DMR+ IPSC2 master, but not yet on a live net. The
+> are verified on a live net on a DMR+ IPSC2 master (NEDECN, Timeslot 2). The
 > Icecast push, transcription, the web app and connection modes (always,
 > on demand, scheduled) work.
 
